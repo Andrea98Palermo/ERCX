@@ -2,15 +2,18 @@
 
 pragma solidity ^0.8.17;
 
+/**
+    A standard for ERC721 NFTs rental and layaway
+ */
 interface IERCX {
 
     struct RentalInfo {
-        address provider;    //Original owner of layawayed token
-        uint256 deadline;   //Layaway deadline
+        address provider;    //Original owner of rented token
+        uint256 deadline;   //Rental deadline
     }
 
     struct TokenRentals {
-        RentalInfo[] rentals;
+        RentalInfo[] rentals;        //List containing token's rental and subrentals details
         address providerApproved;    //Address approved by last rental provider for layaway transfer
         address receiverApproved;   //Address approved by last rental receiver for layawayed token transfer
         bool allowSubrental;        //Specifies if token can be subrented
@@ -28,29 +31,29 @@ interface IERCX {
      */
     event RentalUpdate(uint256 indexed tokenId, address indexed from, address indexed to, uint256 deadline);
 
+    /** @dev Emitted on rental termination.
+     */
+    event RentalTermination(uint256 indexed tokenId, address indexed provider);
+    
     /** @dev Emitted when the address approved for rental of a token is changed or reaffirmed
     The zero address indicates there is no approved address (approval removal).
     When a transfer occurs, this is also emitted to indicate that the address approved for rental
     for that token (if any) is reset to none.*/
     event RentalApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
 
-    /** @dev Emitted on rental termination.
-     */
-    event RentalTermination(uint256 indexed tokenId, address indexed provider);
-
     /** @dev Emitted when the ownership of a rental is transfered.
-      @notice 'from' can be the rental provider or receiver
      */
     event RentalTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
 
     /** @dev Emitted when a rented token is transfered.
-      @notice 'from' can be the rental provider or receiver
      */
     event RentedTokenTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
 
+    /** @dev Emitted when a rental provider cedes the rented token to the receiver
+     */
     event RentedTokenCession(uint256 indexed tokenId, address indexed from, address indexed to);
 
-    /** @dev Emitted when the address approved for the rental transfer of a token is changed or reaffirmed.
+    /** @dev Emitted when the address approved for rental transfer of a token is changed or reaffirmed.
     The zero address indicates there is no approved address (approval removal).*/
     event RentalTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
 
@@ -64,11 +67,12 @@ interface IERCX {
      */
     event LayawayTermination(uint256 indexed tokenId, bool paymentCompleted);
 
-    /** @dev Emitted when a layaway or layawayed token is transfered.
-      @notice 'from' can be the layaway provider or receiver
+    /** @dev Emitted when a layaway ownership is transfered.
      */
     event LayawayTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
 
+    /** @dev Emitted when a layawayed token is transfered.
+     */
     event LayawayedTokenTransfer(uint256 indexed tokenId, address indexed from, address indexed to); 
 
     /** @dev Emitted when the address approved for layaway of a token is changed or reaffirmed.
@@ -92,6 +96,12 @@ interface IERCX {
     @param deadline  UNIX timestamp until which the rental is valid (layawayed token cannot be claimed back). */
     function startRental(uint256 tokenId, address to, uint256 deadline, bool allowSubrental, bool allowTransfers) external;
 
+    /** @notice Starts token subrental rental to an address until deadline
+    @dev Throws if `tokenId` is not a valid NFT.
+    Can be called only by owner or address approved for rental.
+    @param to  The receiver of the token.
+    @param tokenId  Token to be subrented.
+    @param deadline  UNIX timestamp until which the subrental is valid (rented token cannot be claimed back). */
     function startSubrental(uint256 tokenId, address to, uint256 deadline) external;
 
     /**  @notice Updates rental deadline
@@ -108,10 +118,19 @@ interface IERCX {
     @param provider  Provider of rental to be terminated, needed to identify the correct rental record in case of subrental*/
     function endRental(uint256 tokenId, address provider) external;
 
+    /**  @notice Transfers a token during rental.
+     @param tokenId  Rented token.
+     @param to  Receiver of the token */
     function transferRentedToken(address to, uint256 tokenId) external;
 
+    /**  @notice Transfers rental ownership to a new provider.
+     @param tokenId  Rented token.
+     @param to  Receiver of rental ownership */
     function transferRental(address to, uint256 tokenId) external;
 
+    /**  @notice Cedes rented token to rental receiver.
+     @dev Can be called only by rental provider
+     @param tokenId  Rented token. */
     function cedeRentedToken(uint256 tokenId) external;
 
     /** @notice Change or reaffirm the address approved for rental for a token.
@@ -142,14 +161,24 @@ interface IERCX {
     @param provider  Provider of rental, needed to identify the correct rental record in case of subrental*/
     function getRentalDeadline(uint256 tokenId, address provider) external view returns (uint256 deadline);
 
+    /**  @notice Checks if subrental is allowed for a particular token
+    @param tokenId  Token to be checked */
     function isSubrentalAllowed(uint256 tokenId) external view returns (bool subrentalAllowed);
 
+    /**  @notice Checks if rental transfer is allowed for a particular token
+    @param tokenId  Token to be checked */
     function isRentalTransferAllowed(uint256 tokenId) external view returns (bool transferAllowed);
 
+    /**  @notice Retrieves address approved by rental provider for rental ownership transfer
+    @param tokenId  Rented token.*/
     function getRentalTransferProviderApproved(uint256 tokenId) external view returns (address approved);    
 
+    /**  @notice Retrieves address approved by rental receiver for rented token transfer
+    @param tokenId  Rented token.*/
     function getRentalTransferReceiverApproved(uint256 tokenId) external view returns (address approved);
 
+    /**  @notice Retrieves details of all current rentals and subrentals relative to 'tokenId'
+    @param tokenId  Rented token.*/
     function getRentals(uint256 tokenId) external view returns (RentalInfo[] memory rentals);
 
 
@@ -179,13 +208,14 @@ interface IERCX {
     @param paymentCompleted  Specifies whether the layaway payment has been completed */
     function endLayaway(uint256 tokenId, bool paymentCompleted) external;
 
-    /**  @notice Transfers a token during layaway or the layaway ownership.
-    @dev If called by layaway receiver (or address approved by them) it transfers the layawayed token to a new receiver.
-     If called by layaway provider (or address approved by them) it transfer the layaway ownership to a new provider.
+    /**  @notice Transfers a token during layaway.
     @param tokenId  Layawayed token.
-    @param to  Receiver of the token or layaway ownership*/
+    @param to  Receiver of the token */
     function transferLayawayedToken(address to, uint256 tokenId) external;
 
+    /**  @notice Transfers layaway ownership to a new provider.
+    @param tokenId  Layawayed token.
+    @param to  Receiver of the layaway ownerhip */
     function transferLayaway(address to, uint256 tokenId) external;
 
     /** @notice Change or reaffirm the address approved for layaway for a token.
@@ -219,13 +249,12 @@ interface IERCX {
     @param tokenId  Layawayed token.*/
     function getLayawayDeadline(uint256 tokenId) external view returns (uint256 deadline);
 
+    /**  @notice Retrieves address approved by layaway provider for layaway ownership transfer
+    @param tokenId  Layawayed token.*/
     function getLayawayTransferProviderApproved(uint256 tokenId) external view returns (address approved);    
 
+    /**  @notice Retrieves address approved by layaway receiver for layawayed token transfer
+    @param tokenId  Layawayed token.*/
     function getLayawayTransferReceiverApproved(uint256 tokenId) external view returns (address approved);
 
 }
-
-
-
-//Mutuo necessita contratto intermediario per la terminazione (a meno di gestire internamente il pagamento delle rate)
-//Token trasferibili solo durante mutuo (non affitto) --> aggiungere flag a layaway per renderlo anche affitto (senza subaffitto ma con trasferimento)

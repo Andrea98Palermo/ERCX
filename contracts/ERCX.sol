@@ -9,18 +9,19 @@ import "hardhat/console.sol";
 contract ERCX is ERC721, IERCX {
 
 
-    //Mapping from tokenId to rental info
+    //Mapping from tokenId to layaway details
     mapping (uint256 => LayawayInfo) internal _layaways;
     
-    //Mapping from tokenId to address approved for rental
+    //Mapping from tokenId to address approved for layaway
     mapping (uint256 => address) internal _layawayApprovals;
 
-    //Mapping from tokenId to Rental info
+    //Mapping from tokenId to list of rental and subrental details
     mapping (uint256 => TokenRentals) internal _rentals;
 
+    //Mapping used to associate rental and subrental providers to their index in the corresponding list in _rentals mapping
     mapping (uint256 => mapping(address => uint256)) internal _subrentLevels;
     
-    //Mapping from tokenId to address approved for Rental
+    //Mapping from tokenId to address approved for rental
     mapping (uint256 => mapping(address => address)) internal _rentalApprovals;
 
 
@@ -94,7 +95,7 @@ contract ERCX is ERC721, IERCX {
         emit RentalUpdate(tokenId, owner, to, deadline);
     }
 
-    /// @dev See {IERCX-startRental}.
+    /// @dev See {IERCX-startSubental}.
     function startSubrental(uint256 tokenId, address to, uint256 deadline) public virtual override onlyRentedToken(tokenId) {
         address owner = ERC721.ownerOf(tokenId);
         address approved = _rentalApprovals[tokenId][owner];
@@ -279,10 +280,12 @@ contract ERCX is ERC721, IERCX {
         return _layaways[tokenId].deadline;
     }
 
+    /// @dev See {IERCX-getLayawayTransferProviderApproved}.
     function getLayawayTransferProviderApproved(uint256 tokenId) public view virtual override onlyLayawayedToken(tokenId) returns (address approved) {
         return _layaways[tokenId].providerApproved;
     }
 
+    /// @dev See {IERCX-getLayawayTransferReceiverApproved}.
     function getLayawayTransferReceiverApproved(uint256 tokenId) public view virtual override onlyLayawayedToken(tokenId) returns (address approved) {
         return _layaways[tokenId].receiverApproved;
     }
@@ -294,31 +297,36 @@ contract ERCX is ERC721, IERCX {
         return _rentals[tokenId].rentals[subrentLevel - 1].deadline;
     }
 
-    function rentalExists(uint256 tokenId, address provider) public view virtual returns (bool exists) {
-        uint256 subrentLevel = _subrentLevels[tokenId][provider];
-        return subrentLevel != 0;
-    }
-
+    /// @dev See {IERCX-isSubrentalAllowed}.
     function isSubrentalAllowed(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (bool subrentalAllowed) {
         return _rentals[tokenId].allowSubrental;
     }
 
+    /// @dev See {IERCX-isRentalTransferAllowed}.
     function isRentalTransferAllowed(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (bool transferAllowed) {
         return _rentals[tokenId].allowTransfers;
     }
 
+    /// @dev See {IERCX-getRentalTransferProviderApproved}.
     function getRentalTransferProviderApproved(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (address approved) {
         return _rentals[tokenId].providerApproved;
     }
 
+    /// @dev See {IERCX-getRentalTransferReceiverApproved}.
     function getRentalTransferReceiverApproved(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (address approved) {
         return _rentals[tokenId].receiverApproved;
     }
 
+    /// @dev See {IERCX-getRentals}.
     function getRentals(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (RentalInfo[] memory rentals) {
         return _rentals[tokenId].rentals;
     }
 
+
+    /**
+     * @dev Get index of rental or subrental provider
+     * in the corresponding list in _rentals mapping
+     */
     function getSubrentLevel(uint256 tokenId, address provider) public view virtual onlyRentedToken(tokenId) returns (uint256 subrentLevel) {
         return _subrentLevels[tokenId][provider] - 1;
     }
@@ -340,6 +348,17 @@ contract ERCX is ERC721, IERCX {
         return _rentals[tokenId].rentals.length > 0;
     }
 
+    /**
+     * @dev Check if `tokenId` is currently rented or subrented by `provider`
+     */
+    function rentalExists(uint256 tokenId, address provider) public view virtual returns (bool exists) {
+        uint256 subrentLevel = _subrentLevels[tokenId][provider];
+        return subrentLevel != 0;
+    }
+
+    /**
+     * @dev Check if `provider` is currently subrenting `tokenId`
+     */
     function isSubrent(uint256 tokenId, address provider) public view returns (bool subrent) {
         return _subrentLevels[tokenId][provider] != 1;
     }
@@ -361,6 +380,7 @@ contract ERCX is ERC721, IERCX {
         _layawayApprovals[tokenId] = layawayApproved;
     }
 
+    /** @dev See {IERCX-transferLayaway}.*/
     function transferLayaway(address to, uint256 tokenId) public virtual override onlyLayawayedToken(tokenId) {
         LayawayInfo memory info = _layaways[tokenId];
         address sender = _msgSender();
@@ -395,6 +415,7 @@ contract ERCX is ERC721, IERCX {
         _rentalApprovals[tokenId][owner] = rentalApproved;
     }
 
+    /** @dev See {IERCX-transferRental}.*/
     function transferRental(address to, uint256 tokenId) public virtual override onlyRentedToken(tokenId) {
         RentalInfo storage rental = _rentals[tokenId].rentals[_rentals[tokenId].rentals.length - 1];
         TokenRentals storage info = _rentals[tokenId];
@@ -485,10 +506,3 @@ contract ERCX is ERC721, IERCX {
     }
 
 }
-
-
-//ERC4907 permette all'owner di trasferire durante un prestito e cancella lo user
-
-
-//Funzioni doppie + mapping private o funzioni singole + mapping internal  -->  sdoppiare quando ci sono da fare controlli che dipendono dalla chiamata esterna
-

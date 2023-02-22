@@ -5,71 +5,100 @@ pragma solidity ^0.8.17;
 import "./ERCX.sol";
 
 
+/**
+    Marketplace that acts as intermediary for ERCX tokens rentals
+ */
 contract RentalMarketplace {
     
+    /**
+        Emitted when a new rental proposal is submitted to the contract
+     */
     event newRentalProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration, bool allowSubrental, bool allowTransfers);
+    /**
+        Emitted when a new subrental proposal is submitted to the contract
+     */
     event newSubrentalProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration);
+    /**
+        Emitted when a new rental update proposal is submitted to the contract
+     */
     event newUpdateProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration);
+    /**
+        Emitted when a new rental transfer proposal is submitted to the contract
+     */
     event newTransferProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
+    /**
+        Emitted when a new rented token cession proposal is submitted to the contract
+     */
     event newCessionProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
 
 
     struct FullProposal {
-        ERCX collection;
-        uint256 tokenId;
-        address proposer;
-        uint256 price;
-        uint256 duration;
-        uint256 proposalId;
-        bool allowSubrental;
-        bool allowTransfers;
+        ERCX collection;            //ERCX contract address
+        uint256 tokenId;            //NFT's tokenId
+        address proposer;           //Proposal creator
+        uint256 price;              //Proposed rental price
+        uint256 duration;           //Proposed rental duration
+        uint256 proposalId;         //Proposal's index in _rentalProposals mapping
+        bool allowSubrental;        //Specifies if the proposer wants to allow successive subrental
+        bool allowTransfers;        //Specifies if the proposer wants to allow transfers during rental
     }
 
     struct Proposal {
-        ERCX collection;
-        uint256 tokenId;
-        address proposer;
-        uint256 price;
-        uint256 duration;
-        uint256 proposalId;
+        ERCX collection;            //ERCX contract address
+        uint256 tokenId;            //NFT's tokenId
+        address proposer;           //Proposal creator
+        uint256 price;              //Proposed rental price
+        uint256 duration;           //Proposed rental duration
+        uint256 proposalId;         //Proposal's index in proposals mappings
     }
 
     struct TransferProposal {
-        ERCX collection;
-        uint256 tokenId;
-        address proposer;
-        uint256 price;
-        uint256 proposalId;
+        ERCX collection;            //ERCX contract address
+        uint256 tokenId;            //NFT's tokenId
+        address proposer;           //Proposal creator
+        uint256 price;              //Proposed rental price
+        uint256 proposalId;         //Proposal's index in _transferProposals mapping
     }
 
 
-
+    //Current rental proposals
     mapping(uint256 => FullProposal) private _rentalProposals;
+    //Number of existing rental proposals
     uint256 private _rentalProposalsCount;
-
+    
+    //Current subrental proposals
     mapping(uint256 => Proposal) private _subrentalProposals;
+    //Number of existing subrental proposals
     uint256 private _subrentalProposalsCount;
 
+    //Current rental update proposals
     mapping(uint256 => Proposal) private _updateProposals;
+    //Number of existing rental update proposals
     uint256 private _updateProposalsCount;
 
+    //Current rental transfer proposals
     mapping(uint256 => TransferProposal) private _transferProposals;
+    //Number of existing rental transfer proposals
     uint256 private _transferProposalsCount;
 
+    //Current rented token cession proposals
     mapping(uint256 => TransferProposal) private _cessionProposals;
+    //Number of existing cession proposals
     uint256 private _cessionProposalsCount;
 
 
     constructor() {}
 
 
+    /**
+        Creates a rental proposal. Can be called only by owner of 'tokenId'.
+     */
     function makeRentalProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration, bool allowSubrental, bool allowTransfers) external {
         require(!collection._isRented(tokenId), "RentalMarketplace: Use makeSubrentalProposal function to subrent a token");
         address owner = collection.ownerOf(tokenId);
         require(owner == msg.sender, "RentalMarketplace: only token owner can create a rental proposal");
         require(collection.getRentalApproved(tokenId, owner) == address(this), "RentalMarketplace: you must approve rental control to this contract in order to create a rental proposal");
         require(!collection._isLayawayed(tokenId), "RentalMarketplace: Cannot start rental on a layawayed token");
-        //require(duration > 300, "RentalMarketplace: Cannot rent for less than five minutes");
 
         FullProposal storage proposal = _rentalProposals[_rentalProposalsCount];
         proposal.collection = collection;
@@ -84,18 +113,16 @@ contract RentalMarketplace {
         emit newRentalProposal(collection, tokenId, price, duration, allowSubrental, allowTransfers);
     }
 
+    /**
+        Creates a subrental proposal. Can be called only by owner of 'tokenId' if token is rented.
+     */
     function makeSubRentalProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration) external {
         require(collection._isRented(tokenId), "RentalMarketplace: Use makeRentalProposal function for normal rent");
         address owner = collection.ownerOf(tokenId);
         require(owner == msg.sender, "RentalMarketplace: only token owner can create a rental proposal");
         require(collection.getRentalApproved(tokenId, owner) == address(this), "RentalMarketplace: you must approve rental control to this contract in order to create a rental proposal");
         require(!collection._isLayawayed(tokenId), "RentalMarketplace: Cannot start rental on a layawayed token");
-        //require(duration > 300, "RentalMarketplace: Cannot rent for less than five minutes");
-
         require(collection.isSubrentalAllowed(tokenId), "RentalMarketplace: Subrental is not allowed on this token");
-        //IERCX.RentalInfo[] memory rentals = collection.getRentals(tokenId);
-        //require(deadline <= rentals[rentals.length - 1].deadline, "RentalMarketplace: Cannot subrent for a period longer than your rental period");
-
 
         Proposal storage proposal = _subrentalProposals[_subrentalProposalsCount];
         proposal.collection = collection;
@@ -108,15 +135,13 @@ contract RentalMarketplace {
         emit newSubrentalProposal(collection, tokenId, price, duration);
     }
 
+    /**
+        Creates a rental deadline update proposal. Can be called only by rental provider.
+     */
     function makeRentalUpdateProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration) external {
         address sender = msg.sender;
         require(collection.rentalExists(tokenId, sender), "RentalMarketplace: specified rental does not exist");
         require(collection.getRentalApproved(tokenId, sender) == address(this), "RentalMarketplace: rental control must be approved to this contract in order to create an update proposal");
-        //require(block.timestamp + duration > oldDeadline, "RentalMarketplace: Cannot anticipate rental deadline");
-
-        //if (collection.isSubrent(tokenId, sender)) {
-            //require(deadline <= collection.getRentals(tokenId)[collection.getSubrentLevel(tokenId, sender) - 1].deadline, "ERCX: Cannot set subrent deadline after your rental deadline");
-        //}
 
         Proposal storage proposal = _updateProposals[_updateProposalsCount];
         proposal.collection = collection;
@@ -129,8 +154,10 @@ contract RentalMarketplace {
         emit newUpdateProposal(collection, tokenId, price, duration);
     }
 
+    /**
+        Creates a rental transfer proposal. Can be called only by 'tokenId' rental provider or receiver.
+     */
     function makeRentalTransferProposal(ERCX collection, uint256 tokenId, uint256 price) external {
-        //require(collection._isRented(tokenId), "RentalMarketplace: specified token is not currently rented");
         require(collection.isRentalTransferAllowed(tokenId), "ERCX: transfers during rental not allowed on this token");
         IERCX.RentalInfo[] memory rentals = collection.getRentals(tokenId);
         address sender = msg.sender;
@@ -154,8 +181,10 @@ contract RentalMarketplace {
         emit newTransferProposal(collection, tokenId, price);
     }
 
+    /**
+        Creates a rented token cession proposal. Can be called only by 'tokenId' rental provider or receiver.
+     */
     function makeRentalCessionProposal(ERCX collection, uint256 tokenId, uint256 price) external {
-        //require(collection._isRented(tokenId), "RentalMarketplace: specified token is not currently rented");
         IERCX.RentalInfo[] memory rentals = collection.getRentals(tokenId);
         require(rentals.length == 1, "RentalMarketplace: unrented or subrented tokens cannot be sold");
         address sender = msg.sender;
@@ -173,6 +202,10 @@ contract RentalMarketplace {
     }
 
 
+    /**
+        Can be called by any address to accept rental proposal and start rental.
+        Caller must pay proposed price.
+     */
     function acceptRentalProposal(uint256 proposalId) external payable returns (bool success) {
         FullProposal memory proposal = _rentalProposals[proposalId];
 
@@ -192,6 +225,10 @@ contract RentalMarketplace {
         }
     }
 
+    /**
+        Can be called by any address to accept subrental proposal and start subrental.
+        Caller must pay proposed price.
+     */
     function acceptSubrentalProposal(uint256 proposalId) external payable returns (bool success) {
         Proposal memory proposal = _subrentalProposals[proposalId];
         require(proposal.proposer == proposal.collection.ownerOf(proposal.tokenId), "RentalMarketplace: proposer does not own the token anymore");
@@ -212,6 +249,10 @@ contract RentalMarketplace {
         }
     }
 
+    /**
+        Can be called only by rental receiver to accept rental update proposal and update rental deadline.
+        Caller must pay proposed price.
+     */
     function acceptUpdateProposal(uint256 proposalId) external payable returns (bool success) {
         Proposal memory proposal = _updateProposals[proposalId];
 
@@ -242,6 +283,12 @@ contract RentalMarketplace {
     }
 
 
+    /**
+        Can be called by any address to accept rental transfer proposal.
+        If proposer is the rental receiver, the token is transfered to a new receiver.
+        Otherwise, if proposer is the rental provider, the rental ownership is transfered to a new provider.
+        Caller must pay proposed price.
+     */
     function acceptTransferProposal(uint256 proposalId) external payable returns (bool success) {
         TransferProposal memory proposal = _transferProposals[proposalId];
         require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the transfer in order to accept the proposal");
@@ -274,6 +321,10 @@ contract RentalMarketplace {
         }
     }
 
+    /**
+        Can be called only by rental receiver to accept cession proposal and end the layaway
+        Caller must pay proposed price.
+     */
     function acceptCessionProposal(uint256 proposalId) external payable returns (bool success) {
         TransferProposal memory proposal = _cessionProposals[proposalId];
         require(msg.sender == proposal.collection.ownerOf(proposal.tokenId), "RentalMarketplace: only rental receiver can accept cession proposal");
@@ -296,31 +347,45 @@ contract RentalMarketplace {
         }
     }
 
-    
+    /**
+        Deletes a rental proposal. Can be called only by rental proposer.
+     */
     function deleteRentalProposal(uint256 proposalId) external {
         require(msg.sender == _rentalProposals[proposalId].proposer);
         delete _rentalProposals[proposalId];
         _rentalProposalsCount--;
     }
 
+    /**
+        Deletes a subrental proposal. Can be called only by subrental proposer.
+     */
     function deleteSubrentalProposal(uint256 proposalId) external {
         require(msg.sender == _subrentalProposals[proposalId].proposer);
         delete _subrentalProposals[proposalId];
         _subrentalProposalsCount--;
     }
 
+    /**
+        Deletes a rental update proposal. Can be called only by update proposer.
+     */
     function deleteUpdateProposal(uint256 proposalId) external {
         require(msg.sender == _updateProposals[proposalId].proposer);
         delete _updateProposals[proposalId];
         _updateProposalsCount--;
     }
 
+    /**
+        Deletes a rental transfer proposal. Can be called only by transfer proposer.
+     */
     function deleteTransferProposal(uint256 proposalId) external {
         require(msg.sender == _transferProposals[proposalId].proposer);
         delete _transferProposals[proposalId];
         _transferProposalsCount--;
     }
 
+    /**
+        Deletes a rental cession proposal. Can be called only by cession proposer.
+     */
     function deleteCessionProposal(uint256 proposalId) external {
         require(msg.sender == _cessionProposals[proposalId].proposer);
         delete _cessionProposals[proposalId];

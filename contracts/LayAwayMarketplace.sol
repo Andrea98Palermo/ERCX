@@ -5,50 +5,68 @@ pragma solidity ^0.8.17;
 import "./ERCX.sol";
 
 
+/**
+    Marketplace that acts as intermediary for ERCX tokens layaways
+ */
 contract LayawayMarketplace {
     
+    /**
+        Emitted when a new layaway proposal is submitted to the contract
+     */
     event newLayawayProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 installmentAmount, uint256 installmentFrequency, uint256 totalInstallments);
+    
+    /**
+        Emitted when a new layaway proposal is submitted to the contract
+     */
     event newTransferProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
 
 
 
     struct LayawayProposal {
-        ERCX collection;
-        uint256 tokenId;
-        address proposer;
+        ERCX collection;                //ERCX contract address
+        uint256 tokenId;                //NFT's tokenId
+        address proposer;               //Proposal creator
         uint256 installmentAmount;      //Amount due per installment
         uint256 installmentFrequency;   //Installments frequency
         uint256 totalInstallments;      //Total number of installments for the layaway
-        uint256 proposalId;
+        uint256 proposalId;             //Proposal's index in _layawayProposals mapping
     }
 
     struct TransferProposal {
-        ERCX collection;
-        uint256 tokenId;
-        address proposer;
-        uint256 price;
-        uint256 proposalId;
+        ERCX collection;                //ERCX contract address
+        uint256 tokenId;                //NFT's tokenId
+        address proposer;               //Proposal creator
+        uint256 price;                  //Proposed trnasfer price
+        uint256 proposalId;             //Proposal's index in _transferProposals mapping
     }
 
     struct Layaway {
-        ERCX collection;
-        uint256 tokenId;
+        ERCX collection;                //ERCX contract address
+        uint256 tokenId;                //NFT's tokenId
         uint256 installmentAmount;      //Amount due per installment
         uint256 installmentFrequency;   //Installments frequency
         uint256 paidInstallments;       //Number of installments paid yet
         uint256 totalInstallments;      //Total number of installments for the layaway
-        uint256 lastPaymentTime;
-        uint256 layawayId;
+        uint256 lastPaymentTime;        //Timestamp of last paid installment
+        uint256 layawayId;              //Layaway's index in _layaways mapping
     }
 
-
+    //Current layaway proposals
     mapping(uint256 => LayawayProposal) private _layawayProposals;
+    
+    //Number of existing layaway proposals
     uint256 private _layawayProposalsCount;
 
+    //Layaways currently managed by this contract
     mapping(uint256 => Layaway) private _layaways;
+
+    //Number of layaways currently managed by this contract
     uint256 private _layawaysCount;
 
+    //Current layaway transfer proposals
     mapping(uint256 => TransferProposal) private _transferProposals;
+
+    //Number of existing layaway transfer proposals
     uint256 private _transferProposalsCount;
 
 
@@ -56,6 +74,9 @@ contract LayawayMarketplace {
     constructor() {}
 
 
+    /**
+        Creates a layaway proposal. Can be called only by owner of 'tokenId'.
+     */
     function makeLayawayProposal(ERCX collection, uint256 tokenId, uint256 installmentAmount, uint256 installmentFrequency, uint256 totalInstallments) external {
         require(!collection._isRented(tokenId) && !collection._isLayawayed(tokenId), "LayawayMarketplace: Cannot layaway a rented or layawayed token");
         
@@ -78,6 +99,9 @@ contract LayawayMarketplace {
     }
 
 
+    /**
+        Creates a layaway transfer proposal. Can be called only by 'tokenId' layaway provider or receiver.
+     */
     function makeLayawayTransferProposal(ERCX collection, uint256 tokenId, uint256 price) external {
         address sender = msg.sender;
         if(collection.getLayawayProvider(tokenId) == sender) {
@@ -100,6 +124,10 @@ contract LayawayMarketplace {
         emit newTransferProposal(collection, tokenId, price);
     }
 
+    /**
+        Can be called by any address to accept layaway proposal and start layaway.
+        Caller must pay first layaway installment.
+     */
     function acceptLayawayProposal(uint256 proposalId) external payable returns (int layawayId) {
         LayawayProposal memory proposal = _layawayProposals[proposalId];
         require(proposal.proposer == proposal.collection.ownerOf(proposal.tokenId), "LayawayMarketplace: proposer does not own the token anymore");
@@ -128,6 +156,11 @@ contract LayawayMarketplace {
         }
     }
 
+    /**
+        Can be called by any address to pay a layaway installment. 
+        The layaway receiver can be different from the caller.
+        If installment price is paid, updates layaway deadline
+     */
     function payLayawayInstallment(uint256 layawayId) external payable {
         Layaway storage layaway = _layaways[layawayId];
 
@@ -141,6 +174,11 @@ contract LayawayMarketplace {
         layaway.lastPaymentTime = block.timestamp;
     }
 
+    /**
+        Can be called by any address to end a layaway. 
+        If all installments have been paid, the layaway receiver keeps the token.
+        Otherwise, if layaway installment deadline is expired, the token is returned to the layaway provider
+     */
     function endLayaway(uint256 layawayId) external {
         Layaway memory layaway = _layaways[layawayId];
 
@@ -156,7 +194,12 @@ contract LayawayMarketplace {
     
 
 
-
+    /**
+        Can be called by any address to accept layaway transfer proposal.
+        If proposer is the layaway receiver, the token is transfered to a new receiver.
+        Otherwise, if proposer is the layaway provider, the layaway ownership is transfered to a new provider.
+        Caller must pay proposed price.
+     */
     function acceptTransferProposal(uint256 proposalId) external payable returns (bool success) {
         TransferProposal memory proposal = _transferProposals[proposalId];
         require(msg.value >= proposal.price, "LayawayMarketplace: you must pay for the transfer in order to accept the proposal");
@@ -188,13 +231,18 @@ contract LayawayMarketplace {
         }
     }
 
-
+    /**
+        Deletes a layaway proposal. Can be called only by layaway proposer.
+     */
     function deleteLayawayProposal(uint256 proposalId) external {
         require(msg.sender == _layawayProposals[proposalId].proposer);
         delete _layawayProposals[proposalId];
         _layawayProposalsCount--;
     }
 
+    /**
+        Deletes a transfer proposal. Can be called only by transfer proposer.
+     */
     function deleteTransferProposal(uint256 proposalId) external {
         require(msg.sender == _transferProposals[proposalId].proposer);
         delete _transferProposals[proposalId];
