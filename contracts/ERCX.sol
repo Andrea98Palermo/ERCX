@@ -45,8 +45,7 @@ contract ERCX is ERC721, IERCX {
     {}
 
     /// @dev See {IERCX-startLayaway}.
-    function startLayaway(uint256 tokenId, address to, uint256 deadline) public virtual override {
-        
+    function startLayaway(uint256 tokenId, address to, uint256 deadline) public virtual override {  
         address owner = _ownerOf(tokenId);
         address layawayApproved = _layawayApprovals[tokenId];
         
@@ -67,7 +66,6 @@ contract ERCX is ERC721, IERCX {
 
     /// @dev See {IERCX-startRental}.
     function startRental(uint256 tokenId, address to, uint256 deadline, bool allowSubrental, bool allowTransfers) public virtual override {
-        
         address owner = ERC721.ownerOf(tokenId);
         address approved = _rentalApprovals[tokenId][owner];
 
@@ -322,47 +320,6 @@ contract ERCX is ERC721, IERCX {
         return _rentals[tokenId].rentals;
     }
 
-
-    /**
-     * @dev Get index of rental or subrental provider
-     * in the corresponding list in _rentals mapping
-     */
-    function getSubrentLevel(uint256 tokenId, address provider) public view virtual onlyRentedToken(tokenId) returns (uint256 subrentLevel) {
-        return _subrentLevels[tokenId][provider] - 1;
-    }
-
-
-    /**
-     * @dev Check if `tokenId` is currently layawayed.
-     *  Does not check for token existence.
-     */
-    function _isLayawayed(uint256 tokenId) public view virtual returns (bool) {
-        return _layaways[tokenId].provider != address(0);
-    }
-
-    /**
-     * @dev Check if `tokenId` is currently rented.
-     *  Does not check for token existence.
-     */
-    function _isRented(uint256 tokenId) public view virtual returns (bool) {
-        return _rentals[tokenId].rentals.length > 0;
-    }
-
-    /**
-     * @dev Check if `tokenId` is currently rented or subrented by `provider`
-     */
-    function rentalExists(uint256 tokenId, address provider) public view virtual returns (bool exists) {
-        uint256 subrentLevel = _subrentLevels[tokenId][provider];
-        return subrentLevel != 0;
-    }
-
-    /**
-     * @dev Check if `provider` is currently subrenting `tokenId`
-     */
-    function isSubrent(uint256 tokenId, address provider) public view returns (bool subrent) {
-        return _subrentLevels[tokenId][provider] != 1;
-    }
-
     /** @dev See {IERCX-transferLayawayedToken}.*/
     function transferLayawayedToken(address to, uint256 tokenId) public virtual override onlyLayawayedToken(tokenId) {
         LayawayInfo memory info = _layaways[tokenId];
@@ -397,14 +354,12 @@ contract ERCX is ERC721, IERCX {
 
     /** @dev See {IERCX-transferRentedToken}.*/
     function transferRentedToken(address to, uint256 tokenId) public virtual override onlyRentedToken(tokenId) {
-        //RentalInfo storage rental = _rentals[tokenId].rentals[_rentals[tokenId].rentals.length - 1];
         TokenRentals storage info = _rentals[tokenId];
         require(info.allowTransfers, "ERCX: transfers during rental not allowed on this token");
         address sender = _msgSender();
         address owner = _ownerOf(tokenId);
         require(sender == owner || sender == info.receiverApproved, "ERCX: only rental receiver or approved address can transfer during rental");
         
-        //require(to != rental.provider, "ERCX: Cannot transfer to rental provider");
         require(_subrentLevels[tokenId][to] == 0, "ERCX: cannot transfer to an account that is currently subrenting the token");
             
         emit RentedTokenTransfer(tokenId, owner, to);
@@ -448,9 +403,6 @@ contract ERCX is ERC721, IERCX {
         RentalInfo memory rental = _rentals[tokenId].rentals[0];
         require(_msgSender() == rental.provider || _msgSender() == _rentalApprovals[tokenId][rental.provider], "ERCX: can be called only by rental provider or address approved for rental");
         
-        //_rentals[tokenId].rentals.pop();
-        //delete _rentals[tokenId].providerApproved;
-        //delete _rentals[tokenId].receiverApproved;
         delete _rentals[tokenId];
         delete _rentalApprovals[tokenId][rental.provider];
         delete _subrentLevels[tokenId][rental.provider];
@@ -503,6 +455,47 @@ contract ERCX is ERC721, IERCX {
     /** @dev See {IERC165-supportsInterface}. */ 
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return interfaceId == type(IERCX).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+
+    /**
+     * @dev Get index of rental or subrental provider
+     * in the corresponding list in _rentals mapping
+     */
+    function getSubrentLevel(uint256 tokenId, address provider) public view virtual onlyRentedToken(tokenId) returns (uint256 subrentLevel) {
+        return _subrentLevels[tokenId][provider] - 1;
+    }
+
+
+    /**
+     * @dev Check if `tokenId` is currently layawayed.
+     *  Does not check for token existence.
+     */
+    function _isLayawayed(uint256 tokenId) public view virtual returns (bool) {
+        return _layaways[tokenId].provider != address(0);
+    }
+
+    /**
+     * @dev Check if `tokenId` is currently rented.
+     *  Does not check for token existence.
+     */
+    function _isRented(uint256 tokenId) public view virtual returns (bool) {
+        return _rentals[tokenId].rentals.length > 0;
+    }
+
+    /**
+     * @dev Check if `tokenId` is currently rented or subrented by `provider`
+     */
+    function rentalExists(uint256 tokenId, address provider) public view virtual returns (bool exists) {
+        uint256 subrentLevel = _subrentLevels[tokenId][provider];
+        return subrentLevel != 0;
+    }
+
+    /**
+     * @dev Check if `provider` is currently subrenting `tokenId`
+     */
+    function isSubrent(uint256 tokenId, address provider) public view returns (bool subrent) {
+        return _subrentLevels[tokenId][provider] != 1;
     }
 
 }
