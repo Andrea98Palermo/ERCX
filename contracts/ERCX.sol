@@ -408,7 +408,7 @@ contract ERCX is ERC721, IERCX {
         delete _rentalApprovals[tokenId][rental.provider];
         delete _subrentLevels[tokenId][rental.provider];
 
-        emit RentedTokenCession(tokenId, rental.provider, _ownerOf(tokenId));
+        emit RentedTokenRedemption(tokenId, rental.provider, _ownerOf(tokenId));
     }
     
     /**  @dev See {ERC721-_beforeTokeenTransfer}.

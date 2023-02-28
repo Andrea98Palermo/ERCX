@@ -51,7 +51,7 @@ interface IERCX {
 
     /** @dev Emitted when a rental provider cedes the rented token to the receiver
      */
-    event RentedTokenCession(uint256 indexed tokenId, address indexed from, address indexed to);
+    event RentedTokenRedemption(uint256 indexed tokenId, address indexed from, address indexed to);
 
     /** @dev Emitted when the address approved for rented token transfer is changed or reaffirmed.
     The zero address indicates there is no approved address (approval removal).*/
