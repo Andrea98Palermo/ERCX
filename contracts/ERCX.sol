@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "./IERCX.sol";
 import "hardhat/console.sol";
 
-contract ERCX is ERC721, IERCX {
+contract ERCX is ERC721, IERCX { 
 
 
     //Mapping from tokenId to layaway details
@@ -160,12 +160,13 @@ contract ERCX is ERC721, IERCX {
         delete _layawayApprovals[tokenId];
         delete _layaways[tokenId];
 
+        address currentOwner = _ownerOf(tokenId);
         if (!paymentCompleted) {
             require(info.deadline < block.timestamp, "ERCX: layaway not expired yet");
             _transfer(_ownerOf(tokenId), info.provider, tokenId);
         }
 
-        emit LayawayTermination(tokenId, paymentCompleted);
+        emit LayawayTermination(tokenId, info.provider, currentOwner, paymentCompleted);
     }
 
     /// @dev See {IERCX-endRental}.
@@ -176,11 +177,12 @@ contract ERCX is ERC721, IERCX {
         RentalInfo memory info = _rentals[tokenId].rentals[subrentLevel - 1];
         require(info.deadline < block.timestamp, "ERCX: rental not expired yet");
 
+        address currentOwner = _ownerOf(tokenId);
         uint256 nRentals = _rentals[tokenId].rentals.length;
         for (uint256 i = subrentLevel; i <= nRentals; i++) {
             address renter = _rentals[tokenId].rentals[_rentals[tokenId].rentals.length - 1].provider;
 
-            emit RentalTermination(tokenId, renter);
+            emit RentalTermination(tokenId, renter, currentOwner);
 
             _rentals[tokenId].rentals.pop();
             if(i != nRentals - 1) {
@@ -189,7 +191,6 @@ contract ERCX is ERC721, IERCX {
             delete _subrentLevels[tokenId][renter];
         }
 
-        address currentOwner = _ownerOf(tokenId);
         delete _rentalApprovals[tokenId][currentOwner];
         delete _rentals[tokenId].providerApproved;
         delete _rentals[tokenId].receiverApproved;
@@ -217,12 +218,12 @@ contract ERCX is ERC721, IERCX {
         require(sender == provider || sender == _ownerOf(tokenId), "ERCX: Only layaway provider or receiver can approve layaway transfer");
         if (_msgSender() == provider) {
             _layaways[tokenId].providerApproved = to;
+             emit LayawayOwnershipTransferApproval(sender, to, tokenId);
         }
         else {
             _layaways[tokenId].receiverApproved = to;
+            emit LayawayedTokenTransferApproval(sender, to, tokenId);
         }
-
-        emit LayawayTransferApproval(sender, to, tokenId);
     }
 
     /// @dev See {IERCX-approveRentalTransfer}.
@@ -235,12 +236,12 @@ contract ERCX is ERC721, IERCX {
         
         if (_msgSender() == provider) {
             _rentals[tokenId].providerApproved = to;
+            emit RentalOwnershipTransferApproval(sender, to, tokenId);
         }
         else {
             _rentals[tokenId].receiverApproved = to;
+            emit RentedTokenTransferApproval(sender, to, tokenId);
         }
-
-        emit RentalTransferApproval(sender, to, tokenId);
     }
 
     /// @dev See {IERCX-approveRentalControl}.
@@ -278,13 +279,13 @@ contract ERCX is ERC721, IERCX {
         return _layaways[tokenId].deadline;
     }
 
-    /// @dev See {IERCX-getLayawayTransferProviderApproved}.
-    function getLayawayTransferProviderApproved(uint256 tokenId) public view virtual override onlyLayawayedToken(tokenId) returns (address approved) {
+    /// @dev See {IERCX-getLayawayOwnershipTransferApproved}.
+    function getLayawayOwnershipTransferApproved(uint256 tokenId) public view virtual override onlyLayawayedToken(tokenId) returns (address approved) {
         return _layaways[tokenId].providerApproved;
     }
 
-    /// @dev See {IERCX-getLayawayTransferReceiverApproved}.
-    function getLayawayTransferReceiverApproved(uint256 tokenId) public view virtual override onlyLayawayedToken(tokenId) returns (address approved) {
+    /// @dev See {IERCX-getLayawayedTokenTransferApproved}.
+    function getLayawayedTokenTransferApproved(uint256 tokenId) public view virtual override onlyLayawayedToken(tokenId) returns (address approved) {
         return _layaways[tokenId].receiverApproved;
     }
 
@@ -305,13 +306,13 @@ contract ERCX is ERC721, IERCX {
         return _rentals[tokenId].allowTransfers;
     }
 
-    /// @dev See {IERCX-getRentalTransferProviderApproved}.
-    function getRentalTransferProviderApproved(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (address approved) {
+    /// @dev See {IERCX-getRentalOwnershipTransferApproved}.
+    function getRentalOwnershipTransferApproved(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (address approved) {
         return _rentals[tokenId].providerApproved;
     }
 
-    /// @dev See {IERCX-getRentalTransferReceiverApproved}.
-    function getRentalTransferReceiverApproved(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (address approved) {
+    /// @dev See {IERCX-getRentedTokenTransferApproved}.
+    function getRentedTokenTransferApproved(uint256 tokenId) public view virtual override onlyRentedToken(tokenId) returns (address approved) {
         return _rentals[tokenId].receiverApproved;
     }
 
@@ -338,14 +339,14 @@ contract ERCX is ERC721, IERCX {
     }
 
     /** @dev See {IERCX-transferLayaway}.*/
-    function transferLayaway(address to, uint256 tokenId) public virtual override onlyLayawayedToken(tokenId) {
+    function transferLayawayOwnership(address to, uint256 tokenId) public virtual override onlyLayawayedToken(tokenId) {
         LayawayInfo memory info = _layaways[tokenId];
         address sender = _msgSender();
 
         require(sender == info.provider || sender == info.providerApproved, "ERCX: only layaway provider or approved address can transfer layaway");
         require(to != _ownerOf(tokenId), "ERCX: Cannot transfer to layaway receiver");
 
-        emit LayawayTransfer(tokenId, info.provider, to);
+        emit LayawayOwnershipTransfer(tokenId, info.provider, to);
         
         _layaways[tokenId].provider = to;
         _layaways[tokenId].providerApproved = address(0);
@@ -370,8 +371,8 @@ contract ERCX is ERC721, IERCX {
         _rentalApprovals[tokenId][owner] = rentalApproved;
     }
 
-    /** @dev See {IERCX-transferRental}.*/
-    function transferRental(address to, uint256 tokenId) public virtual override onlyRentedToken(tokenId) {
+    /** @dev See {IERCX-transferRentalOwnership}.*/
+    function transferRentalOwnership(address to, uint256 tokenId) public virtual override onlyRentedToken(tokenId) {
         RentalInfo storage rental = _rentals[tokenId].rentals[_rentals[tokenId].rentals.length - 1];
         TokenRentals storage info = _rentals[tokenId];
         require(info.allowTransfers, "ERCX: transfers during rental not allowed on this token");
@@ -384,7 +385,7 @@ contract ERCX is ERC721, IERCX {
         require(_subrentLevels[tokenId][to] == 0, "ERCX: cannot transfer to an account that is currently subrenting the token");
 
 
-        emit RentalTransfer(tokenId, rental.provider, to);
+        emit RentalOwnershipTransfer(tokenId, rental.provider, to);
         
         info.providerApproved = address(0);
 
@@ -397,8 +398,8 @@ contract ERCX is ERC721, IERCX {
         rental.provider = to;
     }
 
-    /** @dev See {IERCX-cedeRentedToken}.*/
-    function cedeRentedToken(uint256 tokenId) public virtual override onlyRentedToken(tokenId) {
+    /** @dev See {IERCX-redeemRentedToken}.*/
+    function redeemRentedToken(uint256 tokenId) public virtual override onlyRentedToken(tokenId) {
         require(_rentals[tokenId].rentals.length == 1, "ERCX: Unrented or subrented tokens cannot be sold");
         RentalInfo memory rental = _rentals[tokenId].rentals[0];
         require(_msgSender() == rental.provider || _msgSender() == _rentalApprovals[tokenId][rental.provider], "ERCX: can be called only by rental provider or address approved for rental");

@@ -4,6 +4,9 @@ pragma solidity ^0.8.17;
 
 import "./ERCX.sol";
 
+/**
+    Demo contract used for testing purposes.
+ */
 contract ERCX_demo is ERCX {
 
     constructor(string memory name, string memory symbol)

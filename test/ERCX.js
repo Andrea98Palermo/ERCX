@@ -317,7 +317,7 @@ describe("ERCX contract", function () {
 
       await hardhatERCX.connect(addr1).approveLayawayTransfer(owner.address, 1);
 
-      await hardhatERCX.connect(owner).transferLayaway(addr3.address, 1);
+      await hardhatERCX.connect(owner).transferLayawayOwnership(addr3.address, 1);
 
       expect(await hardhatERCX.getLayawayProvider(1)).to.equal(addr3.address);
 
@@ -334,7 +334,7 @@ describe("ERCX contract", function () {
     it("Layawayed token should be transferable by layaway provider", async function () {
       const { hardhatERCX, owner, addr1, addr2, addr3 } = await loadFixture(deployAndLayawayFixture);
 
-      await hardhatERCX.connect(addr1).transferLayaway(addr3.address, 1);
+      await hardhatERCX.connect(addr1).transferLayawayOwnership(addr3.address, 1);
 
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
 
@@ -714,7 +714,7 @@ describe("ERCX contract", function () {
       await hardhatERCX.connect(addr1).approveRentalControl(1, owner.address);
       await hardhatERCX.connect(owner).startRental(1, addr2.address, Math.round((Date.now()+300000)/1000), true, true);
 
-      await hardhatERCX.connect(addr1).transferRental(addr3.address, 1);
+      await hardhatERCX.connect(addr1).transferRentalOwnership(addr3.address, 1);
 
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
 
@@ -733,7 +733,7 @@ describe("ERCX contract", function () {
       await hardhatERCX.connect(addr2).startSubrental(1, addr3.address, Math.round((Date.now()+250000)/1000));
       await hardhatERCX.connect(addr3).startSubrental(1, addr4.address, Math.round((Date.now()+200000)/1000));
 
-      await hardhatERCX.connect(addr3).transferRental(addr5.address, 1);
+      await hardhatERCX.connect(addr3).transferRentalOwnership(addr5.address, 1);
 
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
 
@@ -753,7 +753,7 @@ describe("ERCX contract", function () {
 
       await hardhatERCX.connect(addr1).approveRentalTransfer(owner.address, 1);
 
-      await hardhatERCX.connect(owner).transferRental(addr3.address, 1);
+      await hardhatERCX.connect(owner).transferRentalOwnership(addr3.address, 1);
 
       //expect(await hardhatERCX.getLayawayProvider(1)).to.equal(addr3.address);
 
@@ -776,7 +776,7 @@ describe("ERCX contract", function () {
 
       await hardhatERCX.connect(addr3).approveRentalTransfer(owner.address, 1);
 
-      await hardhatERCX.connect(owner).transferRental(addr5.address, 1);
+      await hardhatERCX.connect(owner).transferRentalOwnership(addr5.address, 1);
 
       //expect(await hardhatERCX.getLayawayProvider(1)).to.equal(addr5.address);
 
@@ -801,7 +801,7 @@ describe("ERCX contract", function () {
 
       await hardhatERCX.connect(addr1).startRental(1, addr2.address, Math.round((Date.now()+300000)/1000), true, true);
 
-      await hardhatERCX.connect(addr1).cedeRentedToken(1);
+      await hardhatERCX.connect(addr1).redeemRentedToken(1);
 
       await expect(hardhatERCX.getRentalDeadline(1, addr1.address)).to.be.revertedWith("ERCX: Token must be currently rented");
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
@@ -813,7 +813,7 @@ describe("ERCX contract", function () {
       await hardhatERCX.connect(addr1).approveRentalControl(1, owner.address);
       await hardhatERCX.connect(owner).startRental(1, addr2.address, Math.round((Date.now()+300000)/1000), true, true);
 
-      await hardhatERCX.connect(owner).cedeRentedToken(1);
+      await hardhatERCX.connect(owner).redeemRentedToken(1);
 
       await expect(hardhatERCX.getRentalDeadline(1, addr1.address)).to.be.revertedWith("ERCX: Token must be currently rented");
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
@@ -827,7 +827,7 @@ describe("ERCX contract", function () {
       await hardhatERCX.connect(addr2).startSubrental(1, addr3.address, Math.round((Date.now()+250000)/1000));
       await hardhatERCX.connect(addr3).startSubrental(1, addr4.address, Math.round((Date.now()+200000)/1000));
 
-      await hardhatERCX.connect(addr3).cedeRentedToken(1);
+      await hardhatERCX.connect(addr3).redeemRentedToken(1);
 
       await expect(hardhatERCX.getRentalDeadline(1, addr3.address)).to.be.revertedWith("ERCX: Specified rental does not exist");
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
@@ -842,7 +842,7 @@ describe("ERCX contract", function () {
       await hardhatERCX.connect(addr3).approveRentalControl(1, owner.address);
       await hardhatERCX.connect(owner).startSubrental(1, addr4.address, Math.round((Date.now()+200000)/1000));
 
-      await hardhatERCX.connect(owner).cedeRentedToken(1);
+      await hardhatERCX.connect(owner).redeemRentedToken(1);
 
       await expect(hardhatERCX.getRentalDeadline(1, addr3.address)).to.be.revertedWith("ERCX: Specified rental does not exist");
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
@@ -855,7 +855,7 @@ describe("ERCX contract", function () {
       await hardhatERCX.connect(addr2).startSubrental(1, addr3.address, Math.round((Date.now()+250000)/1000));
       await hardhatERCX.connect(addr3).startSubrental(1, addr4.address, Math.round((Date.now()+200000)/1000));
 
-      await expect(hardhatERCX.connect(addr2).cedeRentedToken(1))
+      await expect(hardhatERCX.connect(addr2).redeemRentedToken(1))
         .to.be.revertedWith("ERCX: Unrented or subrented tokens cannot be sold");
     });
 
@@ -864,7 +864,7 @@ describe("ERCX contract", function () {
 
       await hardhatERCX.connect(addr1).startRental(1, addr2.address, Math.round((Date.now()+300000)/1000), true, true);
 
-      await expect(hardhatERCX.connect(addr3).cedeRentedToken(1))
+      await expect(hardhatERCX.connect(addr3).redeemRentedToken(1))
         .to.be.revertedWith("ERCX: can be called only by rental provider or address approved for rental");
     });
 
@@ -965,9 +965,9 @@ describe("ERCX contract", function () {
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
 
       await hardhatERCX.connect(addr1).approveLayawayTransfer(owner.address, 1);
-      await expect(hardhatERCX.connect(owner).transferLayaway(addr4.address, 1))
+      await expect(hardhatERCX.connect(owner).transferLayawayOwnership(addr4.address, 1))
         .to.be.revertedWith("ERCX: Cannot transfer to layaway receiver");
-      await hardhatERCX.connect(owner).transferLayaway(addr3.address, 1);
+      await hardhatERCX.connect(owner).transferLayawayOwnership(addr3.address, 1);
       expect(await hardhatERCX.getLayawayProvider(1)).to.equal(addr3.address);
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
 
@@ -1015,7 +1015,7 @@ describe("ERCX contract", function () {
       await expect(hardhatERCX.connect(addr2).transferRentedToken(addr3.address, 1))
         .to.be.revertedWith("ERCX: transfers during rental not allowed on this token");
       
-      await expect(hardhatERCX.connect(addr1).transferRental(addr3.address, 1))
+      await expect(hardhatERCX.connect(addr1).transferRentalOwnership(addr3.address, 1))
         .to.be.revertedWith("ERCX: transfers during rental not allowed on this token");
     });
 
@@ -1032,7 +1032,7 @@ describe("ERCX contract", function () {
 
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
 
-      await hardhatERCX.connect(addr2).transferRental(addr5.address, 1);
+      await hardhatERCX.connect(addr2).transferRentalOwnership(addr5.address, 1);
 
       await time.increase(250);
 

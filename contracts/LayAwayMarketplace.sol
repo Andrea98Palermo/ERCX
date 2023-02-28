@@ -105,10 +105,10 @@ contract LayawayMarketplace {
     function makeLayawayTransferProposal(ERCX collection, uint256 tokenId, uint256 price) external {
         address sender = msg.sender;
         if(collection.getLayawayProvider(tokenId) == sender) {
-            require(collection.getLayawayTransferProviderApproved(tokenId) == address(this), "LayawayMarketplace: you must approve layaway transfer to this contract in order to make a transfer proposal");
+            require(collection.getLayawayOwnershipTransferApproved(tokenId) == address(this), "LayawayMarketplace: you must approve layaway transfer to this contract in order to make a transfer proposal");
         }
         else if (collection.ownerOf(tokenId) == sender){
-            require(collection.getLayawayTransferReceiverApproved(tokenId) == address(this), "LayawayMarketplace: you must approve layaway transfer to this contract in order to make a transfer proposal");
+            require(collection.getLayawayedTokenTransferApproved(tokenId) == address(this), "LayawayMarketplace: you must approve layaway transfer to this contract in order to make a transfer proposal");
         }
         else {
             revert("LayawayMarketplace: you must be the layaway provider or receiver in order to make a transfer proposal");
@@ -203,13 +203,13 @@ contract LayawayMarketplace {
     function acceptTransferProposal(uint256 proposalId) external payable returns (bool success) {
         TransferProposal memory proposal = _transferProposals[proposalId];
         require(msg.value >= proposal.price, "LayawayMarketplace: you must pay for the transfer in order to accept the proposal");
-        require(proposal.collection.getLayawayTransferProviderApproved(proposal.tokenId) == address(this) || proposal.collection.getLayawayTransferReceiverApproved(proposal.tokenId) == address(this) , "LayawayMarketplace: proposer must approve layaway transfer to this contract in order to accept the proposal");
+        require(proposal.collection.getLayawayOwnershipTransferApproved(proposal.tokenId) == address(this) || proposal.collection.getLayawayedTokenTransferApproved(proposal.tokenId) == address(this) , "LayawayMarketplace: proposer must approve layaway transfer to this contract in order to accept the proposal");
 
         delete _transferProposals[proposalId];
         _transferProposalsCount--;
 
         if(proposal.proposer == proposal.collection.getLayawayProvider(proposal.tokenId)) {
-            try proposal.collection.transferLayaway(msg.sender, proposal.tokenId) {
+            try proposal.collection.transferLayawayOwnership(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
                 return true;
             }

@@ -162,10 +162,10 @@ contract RentalMarketplace {
         IERCX.RentalInfo[] memory rentals = collection.getRentals(tokenId);
         address sender = msg.sender;
         if(rentals[rentals.length - 1].provider == sender) {
-            require(collection.getRentalTransferProviderApproved(tokenId) == address(this), "RentalMarketplace: you must approve rental transfer to this contract in order to make a transfer proposal");
+            require(collection.getRentalOwnershipTransferApproved(tokenId) == address(this), "RentalMarketplace: you must approve rental transfer to this contract in order to make a transfer proposal");
         }
         else if (collection.ownerOf(tokenId) == sender){
-            require(collection.getRentalTransferReceiverApproved(tokenId) == address(this), "RentalMarketplace: you must approve rental transfer to this contract in order to make a transfer proposal");
+            require(collection.getRentedTokenTransferApproved(tokenId) == address(this), "RentalMarketplace: you must approve rental transfer to this contract in order to make a transfer proposal");
         }
         else {
             revert("RentalMarketplace: you must be the rental provider or receiver in order to make a transfer proposal");
@@ -292,7 +292,7 @@ contract RentalMarketplace {
     function acceptTransferProposal(uint256 proposalId) external payable returns (bool success) {
         TransferProposal memory proposal = _transferProposals[proposalId];
         require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the transfer in order to accept the proposal");
-        require(proposal.collection.getRentalTransferProviderApproved(proposal.tokenId) == address(this) || proposal.collection.getRentalTransferReceiverApproved(proposal.tokenId) == address(this) , "RentalMarketplace: proposer must approve rental transfer to this contract in order to accept the proposal");
+        require(proposal.collection.getRentalOwnershipTransferApproved(proposal.tokenId) == address(this) || proposal.collection.getRentedTokenTransferApproved(proposal.tokenId) == address(this) , "RentalMarketplace: proposer must approve rental transfer to this contract in order to accept the proposal");
 
         delete _transferProposals[proposalId];
         _transferProposalsCount--;
@@ -308,7 +308,7 @@ contract RentalMarketplace {
             }
         }
         else if (proposal.proposer == rentals[rentals.length-1].provider) {
-            try proposal.collection.transferRental(msg.sender, proposal.tokenId) {
+            try proposal.collection.transferRentalOwnership(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
                 return true;
             }
@@ -338,7 +338,7 @@ contract RentalMarketplace {
         delete _cessionProposals[proposalId];
         _cessionProposalsCount--;
 
-        try proposal.collection.cedeRentedToken(proposal.tokenId) {
+        try proposal.collection.redeemRentedToken(proposal.tokenId) {
             payable(proposal.proposer).transfer(msg.value);
             return true;
         }

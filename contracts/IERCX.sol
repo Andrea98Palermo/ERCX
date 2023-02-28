@@ -29,11 +29,11 @@ interface IERCX {
                    
     /** @dev Emitted on rental start and deadline update.
      */
-    event RentalUpdate(uint256 indexed tokenId, address indexed from, address indexed to, uint256 deadline);
+    event RentalUpdate(uint256 indexed tokenId, address indexed provider, address indexed receiver, uint256 deadline);
 
     /** @dev Emitted on rental termination.
      */
-    event RentalTermination(uint256 indexed tokenId, address indexed provider);
+    event RentalTermination(uint256 indexed tokenId, address indexed provider, address indexed receiver);
     
     /** @dev Emitted when the address approved for rental of a token is changed or reaffirmed
     The zero address indicates there is no approved address (approval removal).
@@ -43,7 +43,7 @@ interface IERCX {
 
     /** @dev Emitted when the ownership of a rental is transfered.
      */
-    event RentalTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
+    event RentalOwnershipTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
 
     /** @dev Emitted when a rented token is transfered.
      */
@@ -53,23 +53,27 @@ interface IERCX {
      */
     event RentedTokenCession(uint256 indexed tokenId, address indexed from, address indexed to);
 
-    /** @dev Emitted when the address approved for rental transfer of a token is changed or reaffirmed.
+    /** @dev Emitted when the address approved for rented token transfer is changed or reaffirmed.
     The zero address indicates there is no approved address (approval removal).*/
-    event RentalTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
+    event RentedTokenTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
+    
+    /** @dev Emitted when the address approved for rental ownership transfer is changed or reaffirmed.
+    The zero address indicates there is no approved address (approval removal).*/
+    event RentalOwnershipTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
 
     
     
     /** @dev Emitted on layaway start and update.
      */
-    event LayawayUpdate(uint256 indexed tokenId, address indexed from, address indexed to, uint256 deadline);
+    event LayawayUpdate(uint256 indexed tokenId, address indexed provider, address indexed receiver, uint256 deadline);
 
     /** @dev Emitted on layaway termination
      */
-    event LayawayTermination(uint256 indexed tokenId, bool paymentCompleted);
+    event LayawayTermination(uint256 indexed tokenId, address indexed provider, address indexed receiver, bool paymentCompleted);
 
     /** @dev Emitted when a layaway ownership is transfered.
      */
-    event LayawayTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
+    event LayawayOwnershipTransfer(uint256 indexed tokenId, address indexed from, address indexed to);
 
     /** @dev Emitted when a layawayed token is transfered.
      */
@@ -81,9 +85,14 @@ interface IERCX {
     for that token (if any) is reset to none.*/
     event LayawayApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
 
-    /** @dev Emitted when the address approved for the layaway transfer of a token is changed or reaffirmed.
+     /** @dev Emitted when the address approved for layawayed token transfer is changed or reaffirmed.
     The zero address indicates there is no approved address (approval removal).*/
-    event LayawayTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
+    event LayawayedTokenTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
+    
+    /** @dev Emitted when the address approved for layaway ownership transfer is changed or reaffirmed.
+    The zero address indicates there is no approved address (approval removal).*/
+    event LayawayOwnershipTransferApproval(address indexed approver, address indexed approved, uint256 indexed tokenId);
+
 
 
 
@@ -126,12 +135,12 @@ interface IERCX {
     /**  @notice Transfers rental ownership to a new provider.
      @param tokenId  Rented token.
      @param to  Receiver of rental ownership */
-    function transferRental(address to, uint256 tokenId) external;
+    function transferRentalOwnership(address to, uint256 tokenId) external;
 
-    /**  @notice Cedes rented token to rental receiver.
-     @dev Can be called only by rental provider
+    /**  @notice Definitively transfers rented token to rental receiver.
+     @dev Can be called only by rental provider or address approved for rental
      @param tokenId  Rented token. */
-    function cedeRentedToken(uint256 tokenId) external;
+    function redeemRentedToken(uint256 tokenId) external;
 
     /** @notice Change or reaffirm the address approved for rental for a token.
     @dev The zero address indicates there is no approved address (approval removal).
@@ -140,7 +149,7 @@ interface IERCX {
     @param tokenId  Token to be approved. */
     function approveRentalControl(uint256 tokenId, address to) external;
 
-    /** @notice Change or reaffirm the address approved for rental transfer for a token.
+    /** @notice Change or reaffirm the address approved for rental ownership transfer or rented token transfer.
     @dev The zero address indicates there is no approved address (approval removal).
     Can be called only by rental receiver or provider; throws if 'tokenId' is not currently rented
     @param to  Approved address.
@@ -171,11 +180,11 @@ interface IERCX {
 
     /**  @notice Retrieves address approved by rental provider for rental ownership transfer
     @param tokenId  Rented token.*/
-    function getRentalTransferProviderApproved(uint256 tokenId) external view returns (address approved);    
+    function getRentalOwnershipTransferApproved(uint256 tokenId) external view returns (address approved);    
 
     /**  @notice Retrieves address approved by rental receiver for rented token transfer
     @param tokenId  Rented token.*/
-    function getRentalTransferReceiverApproved(uint256 tokenId) external view returns (address approved);
+    function getRentedTokenTransferApproved(uint256 tokenId) external view returns (address approved);
 
     /**  @notice Retrieves details of all current rentals and subrentals relative to 'tokenId'
     @param tokenId  Rented token.*/
@@ -216,7 +225,7 @@ interface IERCX {
     /**  @notice Transfers layaway ownership to a new provider.
     @param tokenId  Layawayed token.
     @param to  Receiver of the layaway ownerhip */
-    function transferLayaway(address to, uint256 tokenId) external;
+    function transferLayawayOwnership(address to, uint256 tokenId) external;
 
     /** @notice Change or reaffirm the address approved for layaway for a token.
     @dev The zero address indicates there is no approved address (approval removal).
@@ -251,10 +260,10 @@ interface IERCX {
 
     /**  @notice Retrieves address approved by layaway provider for layaway ownership transfer
     @param tokenId  Layawayed token.*/
-    function getLayawayTransferProviderApproved(uint256 tokenId) external view returns (address approved);    
+    function getLayawayOwnershipTransferApproved(uint256 tokenId) external view returns (address approved);    
 
     /**  @notice Retrieves address approved by layaway receiver for layawayed token transfer
     @param tokenId  Layawayed token.*/
-    function getLayawayTransferReceiverApproved(uint256 tokenId) external view returns (address approved);
+    function getLayawayedTokenTransferApproved(uint256 tokenId) external view returns (address approved);
 
 }
