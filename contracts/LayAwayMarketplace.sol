@@ -57,17 +57,26 @@ contract LayawayMarketplace {
     //Number of existing layaway proposals
     uint256 private _layawayProposalsCount;
 
+    //Unused proposal ids
+    uint256[] private _layawayProposalsGaps;
+
     //Layaways currently managed by this contract
     mapping(uint256 => Layaway) private _layaways;
 
     //Number of layaways currently managed by this contract
     uint256 private _layawaysCount;
 
+    //Unused layaway ids
+    uint256[] private _layawaysGaps;
+
     //Current layaway transfer proposals
     mapping(uint256 => TransferProposal) private _transferProposals;
 
     //Number of existing layaway transfer proposals
     uint256 private _transferProposalsCount;
+
+    //Unused proposal ids
+    uint256[] private _transferProposalsGaps;
 
 
 
@@ -86,14 +95,27 @@ contract LayawayMarketplace {
         require(totalInstallments >= 1, "LayawayMarketplace: layaway must have at least one installment");
         require(installmentFrequency > 300, "LayawayMarketplace: Installment frequency cannot be less than five minutes");
 
-        LayawayProposal storage proposal = _layawayProposals[_layawayProposalsCount];
+        LayawayProposal storage proposal;
+
+        if (_layawayProposalsGaps.length > 0) {
+            uint256 index = _layawayProposalsGaps[_layawayProposalsGaps.length - 1];
+            proposal = _layawayProposals[index];
+            proposal.proposalId = index;
+            _layawayProposalsGaps.pop();
+        }
+        else {
+            proposal = _layawayProposals[_layawayProposalsCount];
+            proposal.proposalId = _layawayProposalsCount++;
+        }
+
+
         proposal.collection = collection;
         proposal.tokenId = tokenId;
         proposal.proposer = owner;
         proposal.installmentAmount = installmentAmount;
         proposal.installmentFrequency = installmentFrequency;
         proposal.totalInstallments = totalInstallments;
-        proposal.proposalId = _layawayProposalsCount++;
+        
 
         emit newLayawayProposal(collection, tokenId, installmentAmount, installmentFrequency, totalInstallments);
     }
@@ -114,12 +136,23 @@ contract LayawayMarketplace {
             revert("LayawayMarketplace: you must be the layaway provider or receiver in order to make a transfer proposal");
         }
          
-        TransferProposal storage proposal = _transferProposals[_transferProposalsCount];
+        TransferProposal storage proposal;
+
+        if (_transferProposalsGaps.length > 0) {
+            uint256 index = _transferProposalsGaps[_transferProposalsGaps.length - 1];
+            proposal = _transferProposals[index];
+            proposal.proposalId = index;
+            _transferProposalsGaps.pop();
+        }
+        else {
+            proposal = _transferProposals[_transferProposalsCount];
+            proposal.proposalId = _transferProposalsCount++;
+        }
+
         proposal.collection = collection;
         proposal.tokenId = tokenId;
         proposal.proposer = sender;
         proposal.price = price;
-        proposal.proposalId = _transferProposalsCount++; 
 
         emit newTransferProposal(collection, tokenId, price);
     }
@@ -140,7 +173,20 @@ contract LayawayMarketplace {
         try proposal.collection.startLayaway(proposal.tokenId, msg.sender, block.timestamp+proposal.installmentFrequency) {
             payable(proposal.proposer).transfer(msg.value);
 
-            Layaway storage layaway = _layaways[_layawaysCount];
+            Layaway storage layaway; 
+
+            if (_layawaysGaps.length > 0) {
+                uint256 index = _layawaysGaps[_layawaysGaps.length - 1];
+                layaway = _layaways[index];
+                layaway.layawayId = index;
+                _layawaysGaps.pop();
+            }
+            else {
+                layaway = _layaways[_layawaysCount];
+                layaway.layawayId = _layawaysCount++;
+            }
+
+
             layaway.collection = proposal.collection;
             layaway.tokenId = proposal.tokenId;
             layaway.installmentAmount = proposal.installmentAmount;
@@ -148,7 +194,6 @@ contract LayawayMarketplace {
             layaway.paidInstallments = 1;       
             layaway.totalInstallments = proposal.totalInstallments;      
             layaway.lastPaymentTime = block.timestamp;
-            layaway.layawayId = _layawaysCount++;
             return int(layaway.layawayId);
         }
         catch {
@@ -189,6 +234,9 @@ contract LayawayMarketplace {
             require(layaway.lastPaymentTime + layaway.installmentFrequency <= block.timestamp, "LayawayMarketplace: layaway not expired yet");
             layaway.collection.endLayaway(layaway.tokenId, false);
         }
+
+        delete _layaways[layawayId];
+        _layawaysGaps.push(layawayId);
     }
 
     
@@ -206,7 +254,7 @@ contract LayawayMarketplace {
         require(proposal.collection.getLayawayOwnershipTransferApproved(proposal.tokenId) == address(this) || proposal.collection.getLayawayedTokenTransferApproved(proposal.tokenId) == address(this) , "LayawayMarketplace: proposer must approve layaway transfer to this contract in order to accept the proposal");
 
         delete _transferProposals[proposalId];
-        _transferProposalsCount--;
+        _transferProposalsGaps.push(proposalId);
 
         if(proposal.proposer == proposal.collection.getLayawayProvider(proposal.tokenId)) {
             try proposal.collection.transferLayawayOwnership(msg.sender, proposal.tokenId) {
@@ -237,7 +285,7 @@ contract LayawayMarketplace {
     function deleteLayawayProposal(uint256 proposalId) external {
         require(msg.sender == _layawayProposals[proposalId].proposer);
         delete _layawayProposals[proposalId];
-        _layawayProposalsCount--;
+        _layawayProposalsGaps.push(proposalId);
     }
 
     /**
@@ -246,6 +294,6 @@ contract LayawayMarketplace {
     function deleteTransferProposal(uint256 proposalId) external {
         require(msg.sender == _transferProposals[proposalId].proposer);
         delete _transferProposals[proposalId];
-        _transferProposalsCount--;
+        _transferProposalsGaps.push(proposalId);
     }
 }
