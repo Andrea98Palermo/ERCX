@@ -1043,5 +1043,26 @@ describe("ERCX contract", function () {
 
   });
 
+  describe("Gas costs", function () {
+    it("Run missing layaway functions for gas report", async function () {
+      const { hardhatERCX, owner, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+      await hardhatERCX.connect(addr1).approveRentalControl(1, owner.address);
+      var timestamp = Date.now();
+      await hardhatERCX.connect(owner).startRental(1, addr2.address, Math.round((timestamp+300000)/1000), true, true);
+      await hardhatERCX.connect(addr2).startSubrental(1, addr3.address, Math.round((Date.now()+200000)/1000));
+
+      await hardhatERCX.isRented(1);
+      await hardhatERCX.getRentalApproved(1, addr1.address);
+      await hardhatERCX.getRentalDeadline(1, addr1.address);
+      await hardhatERCX.getRentalOwnershipTransferApproved(1);
+      await hardhatERCX.getRentedTokenTransferApproved(1);
+      await hardhatERCX.getSubrentLevel(1, addr2.address);
+      await hardhatERCX.isSubrent(1, addr2.address);
+      await hardhatERCX.getRentals(1);
+    });
+  });
+
+
 
 });

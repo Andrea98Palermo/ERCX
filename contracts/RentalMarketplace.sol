@@ -10,26 +10,39 @@ import "./ERCX.sol";
  */
 contract RentalMarketplace {
     
+    /** 
+        Types of proposals which can be handled by this contract 
+    */
+    enum ProposalType {RENTAL, SUBRENTAL, UPDATE, TRANSFER, REDEMPTION}
+    
+
     /**
         Emitted when a new rental proposal is submitted to the contract
      */
-    event newRentalProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration, bool allowSubrental, bool allowTransfers);
+    event NewRentalProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration, bool allowSubrental, bool allowTransfers);
     /**
         Emitted when a new subrental proposal is submitted to the contract
      */
-    event newSubrentalProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration);
+    event NewSubrentalProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration);
     /**
         Emitted when a new rental update proposal is submitted to the contract
      */
-    event newUpdateProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration);
+    event NewUpdateProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price, uint256 duration);
     /**
         Emitted when a new rental transfer proposal is submitted to the contract
      */
-    event newTransferProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
+    event NewTransferProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
     /**
         Emitted when a new rented token redemption proposal is submitted to the contract
      */
-    event newRedemptionProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
+    event NewRedemptionProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
+
+    /**
+        Emitted when a proposal is accepted
+     */
+    event ProposalAcceptance(uint256 indexed proposalId, address indexed acceptor, ProposalType indexed proposalType);
+    
+
 
 
     struct FullProposal {
@@ -104,11 +117,11 @@ contract RentalMarketplace {
         Creates a rental proposal. Can be called only by owner of 'tokenId'.
      */
     function makeRentalProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration, bool allowSubrental, bool allowTransfers) external {
-        require(!collection._isRented(tokenId), "RentalMarketplace: Use makeSubrentalProposal function to subrent a token");
+        require(!collection.isRented(tokenId), "RentalMarketplace: Use makeSubrentalProposal function to subrent a token");
         address owner = collection.ownerOf(tokenId);
         require(owner == msg.sender, "RentalMarketplace: only token owner can create a rental proposal");
         require(collection.getRentalApproved(tokenId, owner) == address(this), "RentalMarketplace: you must approve rental control to this contract in order to create a rental proposal");
-        require(!collection._isLayawayed(tokenId), "RentalMarketplace: Cannot start rental on a layawayed token");
+        require(!collection.isLayawayed(tokenId), "RentalMarketplace: Cannot start rental on a layawayed token");
 
         FullProposal storage proposal;
 
@@ -131,18 +144,18 @@ contract RentalMarketplace {
         proposal.allowSubrental = allowSubrental;
         proposal.allowTransfers = allowTransfers;
 
-        emit newRentalProposal(collection, tokenId, price, duration, allowSubrental, allowTransfers);
+        emit NewRentalProposal(collection, tokenId, price, duration, allowSubrental, allowTransfers);
     }
 
     /**
         Creates a subrental proposal. Can be called only by owner of 'tokenId' if token is rented.
      */
     function makeSubRentalProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration) external {
-        require(collection._isRented(tokenId), "RentalMarketplace: Use makeRentalProposal function for normal rent");
+        require(collection.isRented(tokenId), "RentalMarketplace: Use makeRentalProposal function for normal rent");
         address owner = collection.ownerOf(tokenId);
         require(owner == msg.sender, "RentalMarketplace: only token owner can create a rental proposal");
         require(collection.getRentalApproved(tokenId, owner) == address(this), "RentalMarketplace: you must approve rental control to this contract in order to create a rental proposal");
-        require(!collection._isLayawayed(tokenId), "RentalMarketplace: Cannot start rental on a layawayed token");
+        require(!collection.isLayawayed(tokenId), "RentalMarketplace: Cannot start rental on a layawayed token");
         require(collection.isSubrentalAllowed(tokenId), "RentalMarketplace: Subrental is not allowed on this token");
 
         Proposal storage proposal;
@@ -164,7 +177,7 @@ contract RentalMarketplace {
         proposal.price = price;
         proposal.duration = duration;
 
-        emit newSubrentalProposal(collection, tokenId, price, duration);
+        emit NewSubrentalProposal(collection, tokenId, price, duration);
     }
 
     /**
@@ -194,7 +207,7 @@ contract RentalMarketplace {
         proposal.price = price;
         proposal.duration = duration;
 
-        emit newUpdateProposal(collection, tokenId, price, duration);
+        emit NewUpdateProposal(collection, tokenId, price, duration);
     }
 
     /**
@@ -232,7 +245,7 @@ contract RentalMarketplace {
         proposal.proposer = sender;
         proposal.price = price; 
 
-        emit newTransferProposal(collection, tokenId, price);
+        emit NewTransferProposal(collection, tokenId, price);
     }
 
     /**
@@ -263,7 +276,7 @@ contract RentalMarketplace {
         proposal.proposer = sender;
         proposal.price = price;
 
-        emit newRedemptionProposal(collection, tokenId, price);
+        emit NewRedemptionProposal(collection, tokenId, price);
     }
 
 
@@ -283,6 +296,7 @@ contract RentalMarketplace {
 
         try proposal.collection.startRental(proposal.tokenId, msg.sender, block.timestamp+proposal.duration, proposal.allowSubrental, proposal.allowTransfers) {
             payable(proposal.proposer).transfer(msg.value);
+            emit ProposalAcceptance(proposalId, msg.sender, ProposalType.RENTAL);
             return true;
         }
         catch {
@@ -307,6 +321,7 @@ contract RentalMarketplace {
 
         try proposal.collection.startSubrental(proposal.tokenId, msg.sender, block.timestamp+proposal.duration) {
             payable(proposal.proposer).transfer(msg.value);
+            emit ProposalAcceptance(proposalId, msg.sender, ProposalType.SUBRENTAL);
             return true;
         }
         catch {
@@ -340,6 +355,7 @@ contract RentalMarketplace {
 
         try proposal.collection.updateRental(proposal.tokenId, block.timestamp+proposal.duration, proposal.proposer) {
             payable(proposal.proposer).transfer(msg.value);
+            emit ProposalAcceptance(proposalId, msg.sender, ProposalType.UPDATE);
             return true;
         }
         catch {
@@ -375,6 +391,7 @@ contract RentalMarketplace {
         else if (proposal.proposer == rentals[rentals.length-1].provider) {
             try proposal.collection.transferRentalOwnership(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
+                emit ProposalAcceptance(proposalId, msg.sender, ProposalType.TRANSFER);
                 return true;
             }
             catch {
@@ -405,6 +422,7 @@ contract RentalMarketplace {
 
         try proposal.collection.redeemRentedToken(proposal.tokenId) {
             payable(proposal.proposer).transfer(msg.value);
+            emit ProposalAcceptance(proposalId, msg.sender, ProposalType.REDEMPTION);
             return true;
         }
         catch {

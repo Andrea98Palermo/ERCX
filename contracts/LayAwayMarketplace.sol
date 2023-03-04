@@ -9,6 +9,12 @@ import "./ERCX.sol";
     Marketplace that acts as intermediary for ERCX tokens layaways
  */
 contract LayawayMarketplace {
+
+    /** 
+        Types of proposals which can be handled by this contract 
+    */
+    enum ProposalType {LAYAWAY, TRANSFER}
+
     
     /**
         Emitted when a new layaway proposal is submitted to the contract
@@ -19,6 +25,11 @@ contract LayawayMarketplace {
         Emitted when a new layaway proposal is submitted to the contract
      */
     event newTransferProposal(ERCX indexed collection, uint256 indexed tokenId, uint256 indexed price);
+
+    /**
+        Emitted when a proposal is accepted
+     */
+    event ProposalAcceptance(uint256 indexed proposalId, address indexed acceptor, ProposalType indexed proposalType);
 
 
 
@@ -87,7 +98,7 @@ contract LayawayMarketplace {
         Creates a layaway proposal. Can be called only by owner of 'tokenId'.
      */
     function makeLayawayProposal(ERCX collection, uint256 tokenId, uint256 installmentAmount, uint256 installmentFrequency, uint256 totalInstallments) external {
-        require(!collection._isRented(tokenId) && !collection._isLayawayed(tokenId), "LayawayMarketplace: Cannot layaway a rented or layawayed token");
+        require(!collection.isRented(tokenId) && !collection.isLayawayed(tokenId), "LayawayMarketplace: Cannot layaway a rented or layawayed token");
         
         address owner = collection.ownerOf(tokenId);
         require(owner == msg.sender, "LayawayMarketplace: only token owner can create a layaway proposal");
@@ -194,6 +205,8 @@ contract LayawayMarketplace {
             layaway.paidInstallments = 1;       
             layaway.totalInstallments = proposal.totalInstallments;      
             layaway.lastPaymentTime = block.timestamp;
+            
+            emit ProposalAcceptance(proposalId, msg.sender, ProposalType.LAYAWAY);
             return int(layaway.layawayId);
         }
         catch {
@@ -268,6 +281,7 @@ contract LayawayMarketplace {
         else if (proposal.proposer == proposal.collection.ownerOf(proposal.tokenId)) {      // if proposer is token owner
             try proposal.collection.transferLayawayedToken(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
+                emit ProposalAcceptance(proposalId, msg.sender, ProposalType.TRANSFER);
                 return true;
             }
             catch {

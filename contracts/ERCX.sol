@@ -28,13 +28,13 @@ contract ERCX is ERC721, IERCX {
 
     /// @notice Requires token to be layawayed
     modifier onlyLayawayedToken(uint256 tokenId) {
-        require(_isLayawayed(tokenId), "ERCX: Token must be currently layawayed");
+        require(isLayawayed(tokenId), "ERCX: Token must be currently layawayed");
         _;
     }
 
     /// @notice Requires token to be rented
     modifier onlyRentedToken(uint256 tokenId) {
-        require(_isRented(tokenId), "ERCX: Token must be currently rented");
+        require(isRented(tokenId), "ERCX: Token must be currently rented");
         _;
     }  
 
@@ -50,7 +50,7 @@ contract ERCX is ERC721, IERCX {
         address layawayApproved = _layawayApprovals[tokenId];
         
         require(layawayApproved == _msgSender(), "ERCX: Can be called only by address approved for layaway");
-        require(!_isLayawayed(tokenId) && !_isRented(tokenId), "ERCX: Cannot start layaway on a layawayed or rented token");
+        require(!isLayawayed(tokenId) && !isRented(tokenId), "ERCX: Cannot start layaway on a layawayed or rented token");
         require(deadline > block.timestamp, "ERCX: layaway deadline expired yet");
         require(to != address(0), "ERCX: cannot layaway to the zero address");
         
@@ -71,8 +71,8 @@ contract ERCX is ERC721, IERCX {
 
         require(owner == _msgSender() || approved == _msgSender(), "ERCX: Can be called only by owner or address approved for rental");
         require(owner != to, "Cannot self-rent");
-        require(!_isLayawayed(tokenId), "ERCX: Cannot start rental on a layawayed token");
-        require(!_isRented(tokenId), "ERCX: Use startSubrental function to subrent");
+        require(!isLayawayed(tokenId), "ERCX: Cannot start rental on a layawayed token");
+        require(!isRented(tokenId), "ERCX: Use startSubrental function to subrent");
         require(deadline > block.timestamp, "ERCX: Rental deadline expired yet");
         require(to != address(0), "ERCX: cannot rent to the zero address"); 
 
@@ -100,7 +100,7 @@ contract ERCX is ERC721, IERCX {
 
         require(owner == _msgSender() || approved == _msgSender(), "ERCX: Can be called only by owner or address approved for rental");
         require(owner != to, "Cannot self-rent");
-        require(!_isLayawayed(tokenId), "ERCX: Cannot start rental on a layawayed token");
+        require(!isLayawayed(tokenId), "ERCX: Cannot start rental on a layawayed token");
         require(deadline > block.timestamp, "ERCX: Rental deadline expired yet");
         require(to != address(0), "ERCX: cannot rent to the zero address"); 
         require(_rentals[tokenId].allowSubrental, "ERCX: Subrental is not allowed on this token");
@@ -200,7 +200,7 @@ contract ERCX is ERC721, IERCX {
 
     /// @dev See {IERCX-approveLayawayControl}.
     function approveLayawayControl(address to, uint256 tokenId) public virtual override {
-        require(!_isLayawayed(tokenId) && !_isRented(tokenId), "ERCX: cannot approve layawayed or rented token");
+        require(!isLayawayed(tokenId) && !isRented(tokenId), "ERCX: cannot approve layawayed or rented token");
         
         address owner = _ownerOf(tokenId);
         require(to != owner, "ERCX: layaway approval to current owner");
@@ -246,7 +246,7 @@ contract ERCX is ERC721, IERCX {
 
     /// @dev See {IERCX-approveRentalControl}.
     function approveRentalControl(uint256 tokenId, address to) public virtual override {
-        require(!_isLayawayed(tokenId), "ERCX: Cannot rent layawayed token");
+        require(!isLayawayed(tokenId), "ERCX: Cannot rent layawayed token");
         
         address owner = ERC721.ownerOf(tokenId);
         require(to != owner, "ERCX: Rental approval to current owner");
@@ -425,31 +425,31 @@ contract ERCX is ERC721, IERCX {
     /**  @dev See {ERC721-transferFrom}.
      @notice Resets layaway and rental approvals before transfering */
     function transferFrom(address from, address to, uint256 tokenId) public virtual override {
-        require(!_isLayawayed(tokenId), "ERCX: use transferLayawayedToken function to transfer a layawayed token");
-        require(!_isRented(tokenId), "ERCX: Cannot transfer rented token. If rental expired call endRental before");
+        require(!isLayawayed(tokenId), "ERCX: use transferLayawayedToken function to transfer a layawayed token");
+        require(!isRented(tokenId), "ERCX: Cannot transfer rented token. If rental expired call endRental before");
         ERC721.transferFrom(from, to, tokenId);
     }
 
     /**  @dev See {ERC721-safeTransferFrom}.
      @notice Resets layaway and rental approvals before transfering */
     function safeTransferFrom(address from, address to, uint256 tokenId) public virtual override {
-        require(!_isLayawayed(tokenId), "ERCX: use transferLayawayedToken function to transfer a layawayed token");
-        require(!_isRented(tokenId), "ERCX: Cannot transfer rented token. If rental expired call endRental before");
+        require(!isLayawayed(tokenId), "ERCX: use transferLayawayedToken function to transfer a layawayed token");
+        require(!isRented(tokenId), "ERCX: Cannot transfer rented token. If rental expired call endRental before");
         ERC721.safeTransferFrom(from, to, tokenId);
     }
 
     /**  @dev See {ERC721-safeTransferFrom}.
      @notice Resets layaway and rental approvals before transfering */
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public virtual override {
-        require(!_isLayawayed(tokenId), "ERCX: use transferLayawayedToken function to transfer a layawayed token");
-        require(!_isRented(tokenId), "ERCX: Cannot transfer rented token. If rental expired call endRental before");
+        require(!isLayawayed(tokenId), "ERCX: use transferLayawayedToken function to transfer a layawayed token");
+        require(!isRented(tokenId), "ERCX: Cannot transfer rented token. If rental expired call endRental before");
         ERC721.safeTransferFrom(from, to, tokenId, data);
     }
 
     /**  @dev See {ERC721-approve}.
      @notice throws if 'tokenId' is currently layawayed or rented*/
     function approve(address to, uint256 tokenId) public virtual override {
-        require(!_isLayawayed(tokenId) && !_isRented(tokenId), "ERCX: cannot approve layawayed or rented token");
+        require(!isLayawayed(tokenId) && !isRented(tokenId), "ERCX: cannot approve layawayed or rented token");
         ERC721.approve(to, tokenId);  
     }
 
@@ -472,7 +472,7 @@ contract ERCX is ERC721, IERCX {
      * @dev Check if `tokenId` is currently layawayed.
      *  Does not check for token existence.
      */
-    function _isLayawayed(uint256 tokenId) public view virtual returns (bool) {
+    function isLayawayed(uint256 tokenId) public view virtual returns (bool) {
         return _layaways[tokenId].provider != address(0);
     }
 
@@ -480,7 +480,7 @@ contract ERCX is ERC721, IERCX {
      * @dev Check if `tokenId` is currently rented.
      *  Does not check for token existence.
      */
-    function _isRented(uint256 tokenId) public view virtual returns (bool) {
+    function isRented(uint256 tokenId) public view virtual returns (bool) {
         return _rentals[tokenId].rentals.length > 0;
     }
 
