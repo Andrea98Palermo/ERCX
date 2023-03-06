@@ -20,9 +20,15 @@ describe("ERCX contract", function () {
   //Deploys the contract and mints nine tokens, giving three of them to three different addresses
   async function deployAndMintFixture() {
     const ERCX = await ethers.getContractFactory("ERCX_demo");
+    const rentalMarketplace = await ethers.getContractFactory("RentalMarketplace");
+    const layawayMarketplace = await ethers.getContractFactory("LayawayMarketplace");
     const [owner, addr1, addr2, addr3, addr4, addr5] = await ethers.getSigners();
 
     const hardhatERCX = await ERCX.deploy("ERCXCollection", "ERCX");
+    await hardhatERCX.deployed();
+
+    const hardhatRentalMarketplace = await rentalMarketplace.deploy();
+    const hardhatLayawayMarketplace = await layawayMarketplace.deploy();
     await hardhatERCX.deployed();
 
     let tokenId = 0;
@@ -33,7 +39,7 @@ describe("ERCX contract", function () {
       tokenId += 3;
     }
 
-    return { ERCX, hardhatERCX, owner, addr1, addr2, addr3, addr4, addr5 };
+    return { ERCX, hardhatERCX, hardhatRentalMarketplace, hardhatLayawayMarketplace, owner, addr1, addr2, addr3, addr4, addr5 };
   }
 
 
@@ -995,6 +1001,227 @@ describe("ERCX contract", function () {
       await time.increase(999999999);
       await hardhatERCX.endRental(1, addr4.address);
       expect(await hardhatERCX.ownerOf(1)).to.equal(addr4.address);
+    });
+
+  });
+
+
+
+  describe("Intermediary contracts", function () {
+    
+    describe("Rental marketplace", function () {
+      
+      it("Approved intermediary should start rental upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatRentalMarketplace, addr1, addr2 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalProposal(hardhatERCX.address, 1, 100, 300, true, true);
+
+        await hardhatRentalMarketplace.connect(addr2).acceptRentalProposal(0, {value: 100});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await time.increase(100);
+
+        await expect(hardhatERCX.endRental(1, addr1.address)).to.be.revertedWith("ERCX: rental not expired yet");
+
+        await time.increase(300);
+
+        await hardhatERCX.endRental(1, addr1.address);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr1.address);
+      });
+
+      it("Approved intermediary should start subrental upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatRentalMarketplace, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalProposal(hardhatERCX.address, 1, 100, 300, true, true);
+
+        await hardhatRentalMarketplace.connect(addr2).acceptRentalProposal(0, {value: 100});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatERCX.connect(addr2).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr2).makeSubrentalProposal(hardhatERCX.address, 1, 50, 200);
+
+        await hardhatRentalMarketplace.connect(addr3).acceptSubrentalProposal(0, {value: 50});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr3.address);
+
+
+        await time.increase(100);
+
+        await expect(hardhatERCX.endRental(1, addr1.address)).to.be.revertedWith("ERCX: rental not expired yet");
+        await expect(hardhatERCX.endRental(1, addr2.address)).to.be.revertedWith("ERCX: rental not expired yet");
+
+        await time.increase(100);
+
+        await expect(hardhatERCX.endRental(1, addr1.address)).to.be.revertedWith("ERCX: rental not expired yet");
+        await hardhatERCX.endRental(1, addr2.address);
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await time.increase(200);
+
+        await hardhatERCX.endRental(1, addr1.address);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr1.address);
+      });
+
+      it("Approved intermediary should update rental deadline upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatRentalMarketplace, addr1, addr2 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalProposal(hardhatERCX.address, 1, 100, 300, true, true);
+
+        await hardhatRentalMarketplace.connect(addr2).acceptRentalProposal(0, {value: 100});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatRentalMarketplace.connect(addr1).makeRentalUpdateProposal(hardhatERCX.address, 1, 20, 100);
+
+        expect(await hardhatRentalMarketplace.connect(addr2).acceptUpdateProposal(0, {value: 20})).to.emit(hardhatRentalMarketplace, "ProposalAcceptance");
+
+        await time.increase(300);
+
+        await expect(hardhatERCX.endRental(1, addr1.address)).to.be.revertedWith("ERCX: rental not expired yet");
+
+        await time.increase(200);
+
+        await hardhatERCX.endRental(1, addr1.address);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr1.address);
+      });
+
+      it("Approved intermediary should transfer rented token upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatRentalMarketplace, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalProposal(hardhatERCX.address, 1, 100, 300, true, true);
+
+        await hardhatRentalMarketplace.connect(addr2).acceptRentalProposal(0, {value: 100});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatERCX.connect(addr2).approveRentalTransfer(hardhatRentalMarketplace.address, 1);
+        await hardhatRentalMarketplace.connect(addr2).makeRentalTransferProposal(hardhatERCX.address, 1, 20);
+
+        expect(await hardhatRentalMarketplace.connect(addr3).acceptTransferProposal(0, {value: 20})).to.emit(hardhatRentalMarketplace, "ProposalAcceptance");
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr3.address);
+
+        await time.increase(100);
+
+        await expect(hardhatERCX.endRental(1, addr1.address)).to.be.revertedWith("ERCX: rental not expired yet");
+
+        await time.increase(300);
+
+        await hardhatERCX.endRental(1, addr1.address);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr1.address);
+      });
+
+      it("Approved intermediary should transfer rental ownership upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatRentalMarketplace, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalProposal(hardhatERCX.address, 1, 100, 300, true, true);
+
+        await hardhatRentalMarketplace.connect(addr2).acceptRentalProposal(0, {value: 100});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatERCX.connect(addr1).approveRentalTransfer(hardhatRentalMarketplace.address, 1);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalTransferProposal(hardhatERCX.address, 1, 20);
+
+        expect(await hardhatRentalMarketplace.connect(addr3).acceptTransferProposal(0, {value: 20})).to.emit(hardhatRentalMarketplace, "ProposalAcceptance");
+
+        await time.increase(100);
+
+        await expect(hardhatERCX.endRental(1, addr3.address)).to.be.revertedWith("ERCX: rental not expired yet");
+
+        await time.increase(300);
+
+        await hardhatERCX.endRental(1, addr3.address);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr3.address);
+      });
+
+      it("Approved intermediary should perform rented token redemption upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatRentalMarketplace, addr1, addr2 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveRentalControl(1, hardhatRentalMarketplace.address);
+        await hardhatRentalMarketplace.connect(addr1).makeRentalProposal(hardhatERCX.address, 1, 100, 300, true, true);
+
+        await hardhatRentalMarketplace.connect(addr2).acceptRentalProposal(0, {value: 100});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatRentalMarketplace.connect(addr1).makeRentalRedemptionProposal(hardhatERCX.address, 1, 20);
+
+        expect(await hardhatRentalMarketplace.connect(addr2).acceptRedemptionProposal(0, {value: 20})).to.emit(hardhatRentalMarketplace, "ProposalAcceptance");
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        expect(await hardhatERCX.isRented(1)).to.equal(false);
+      });
+
+    });
+
+    describe("Layaway marketplace", function () {
+
+      it("Approved intermediary should start layaway upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatLayawayMarketplace, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveLayawayControl(hardhatLayawayMarketplace.address, 1);
+        await hardhatLayawayMarketplace.connect(addr1).makeLayawayProposal(hardhatERCX.address, 1, 20, 400, 2);
+
+        await hardhatLayawayMarketplace.connect(addr2).acceptLayawayProposal(0, {value: 20});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatLayawayMarketplace.connect(addr2).payLayawayInstallment(0, {value: 20});
+
+        await hardhatLayawayMarketplace.endLayaway(0);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+      });
+
+      it("Approved intermediary should transfer layawayed token upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatLayawayMarketplace, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveLayawayControl(hardhatLayawayMarketplace.address, 1);
+        await hardhatLayawayMarketplace.connect(addr1).makeLayawayProposal(hardhatERCX.address, 1, 20, 400, 2);
+
+        await hardhatLayawayMarketplace.connect(addr2).acceptLayawayProposal(0, {value: 20});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatERCX.connect(addr2).approveLayawayTransfer(hardhatLayawayMarketplace.address, 1);
+        await hardhatLayawayMarketplace.connect(addr2).makeLayawayTransferProposal(hardhatERCX.address, 1, 20);
+
+        expect(await hardhatLayawayMarketplace.connect(addr3).acceptTransferProposal(0, {value: 20})).to.emit(hardhatLayawayMarketplace, "ProposalAcceptance");
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr3.address);
+
+        await hardhatLayawayMarketplace.connect(addr3).payLayawayInstallment(0, {value: 20});
+
+        await hardhatLayawayMarketplace.endLayaway(0);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr3.address);
+      });
+
+      it("Approved intermediary should transfer layaway ownership upon proposal acceptance", async function () {
+        const { hardhatERCX, hardhatLayawayMarketplace, addr1, addr2, addr3 } = await loadFixture(deployAndMintFixture);
+
+        await hardhatERCX.connect(addr1).approveLayawayControl(hardhatLayawayMarketplace.address, 1);
+        await hardhatLayawayMarketplace.connect(addr1).makeLayawayProposal(hardhatERCX.address, 1, 20, 400, 2);
+
+        await hardhatLayawayMarketplace.connect(addr2).acceptLayawayProposal(0, {value: 20});
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await hardhatERCX.connect(addr1).approveLayawayTransfer(hardhatLayawayMarketplace.address, 1);
+        await hardhatLayawayMarketplace.connect(addr1).makeLayawayTransferProposal(hardhatERCX.address, 1, 20);
+
+        expect(await hardhatLayawayMarketplace.connect(addr3).acceptTransferProposal(0, {value: 20})).to.emit(hardhatLayawayMarketplace, "ProposalAcceptance");
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr2.address);
+
+        await time.increase(500);
+
+        await hardhatLayawayMarketplace.endLayaway(0);
+
+        expect(await hardhatERCX.ownerOf(1)).to.equal(addr3.address);
+      });
+
     });
 
   });

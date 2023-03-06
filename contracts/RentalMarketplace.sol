@@ -150,7 +150,7 @@ contract RentalMarketplace {
     /**
         Creates a subrental proposal. Can be called only by owner of 'tokenId' if token is rented.
      */
-    function makeSubRentalProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration) external {
+    function makeSubrentalProposal(ERCX collection, uint256 tokenId, uint256 price, uint256 duration) external {
         require(collection.isRented(tokenId), "RentalMarketplace: Use makeRentalProposal function for normal rent");
         address owner = collection.ownerOf(tokenId);
         require(owner == msg.sender, "RentalMarketplace: only token owner can create a rental proposal");
@@ -284,7 +284,7 @@ contract RentalMarketplace {
         Can be called by any address to accept rental proposal and start rental.
         Caller must pay proposed price.
      */
-    function acceptRentalProposal(uint256 proposalId) external payable returns (bool success) {
+    function acceptRentalProposal(uint256 proposalId) external payable {
         FullProposal memory proposal = _rentalProposals[proposalId];
 
         require(proposal.proposer == proposal.collection.ownerOf(proposal.tokenId), "RentalMarketplace: proposer does not own the token anymore");
@@ -297,18 +297,15 @@ contract RentalMarketplace {
         try proposal.collection.startRental(proposal.tokenId, msg.sender, block.timestamp+proposal.duration, proposal.allowSubrental, proposal.allowTransfers) {
             payable(proposal.proposer).transfer(msg.value);
             emit ProposalAcceptance(proposalId, msg.sender, ProposalType.RENTAL);
-            return true;
         }
-        catch {
-            return false;
-        }
+        catch {}
     }
 
     /**
         Can be called by any address to accept subrental proposal and start subrental.
         Caller must pay proposed price.
      */
-    function acceptSubrentalProposal(uint256 proposalId) external payable returns (bool success) {
+    function acceptSubrentalProposal(uint256 proposalId) external payable {
         Proposal memory proposal = _subrentalProposals[proposalId];
         require(proposal.proposer == proposal.collection.ownerOf(proposal.tokenId), "RentalMarketplace: proposer does not own the token anymore");
         require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the rental in order to accept the proposal");
@@ -322,26 +319,22 @@ contract RentalMarketplace {
         try proposal.collection.startSubrental(proposal.tokenId, msg.sender, block.timestamp+proposal.duration) {
             payable(proposal.proposer).transfer(msg.value);
             emit ProposalAcceptance(proposalId, msg.sender, ProposalType.SUBRENTAL);
-            return true;
         }
-        catch {
-            return false;
-        }
+        catch {}
     }
 
     /**
         Can be called only by rental receiver to accept rental update proposal and update rental deadline.
         Caller must pay proposed price.
      */
-    function acceptUpdateProposal(uint256 proposalId) external payable returns (bool success) {
+    function acceptUpdateProposal(uint256 proposalId) external payable {
         Proposal memory proposal = _updateProposals[proposalId];
 
         require(msg.sender == proposal.collection.ownerOf(proposal.tokenId), "RentalMarketplace: only rental receiver can accept update proposal");
-        require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the rental in order to accept the proposal");
+        require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the update in order to accept the proposal");
         require(proposal.collection.getRentalApproved(proposal.tokenId, proposal.proposer) == address(this), "RentalMarketplace: proposer must approve rental control to this contract in order to update the rental");
 
-        uint256 newDeadline = block.timestamp + proposal.duration;
-        require(newDeadline > proposal.collection.getRentalDeadline(proposal.tokenId, proposal.proposer), "RentalMarketplace: Cannot anticipate rental deadline");
+        uint256 newDeadline = proposal.collection.getRentalDeadline(proposal.tokenId, proposal.proposer) + proposal.duration;
 
         IERCX.RentalInfo[] memory rentals = proposal.collection.getRentals(proposal.tokenId);
         require(rentals[rentals.length-1].provider == proposal.proposer, "RentalMarketplace: Proposer is not rental provider anymore");
@@ -353,14 +346,11 @@ contract RentalMarketplace {
         delete _updateProposals[proposalId];
         _updateProposalsGaps.push(proposalId);
 
-        try proposal.collection.updateRental(proposal.tokenId, block.timestamp+proposal.duration, proposal.proposer) {
+        try proposal.collection.updateRental(proposal.tokenId, newDeadline, proposal.proposer) {
             payable(proposal.proposer).transfer(msg.value);
             emit ProposalAcceptance(proposalId, msg.sender, ProposalType.UPDATE);
-            return true;
         }
-        catch {
-            return false;
-        }
+        catch {}
     }
 
 
@@ -370,7 +360,7 @@ contract RentalMarketplace {
         Otherwise, if proposer is the rental provider, the rental ownership is transfered to a new provider.
         Caller must pay proposed price.
      */
-    function acceptTransferProposal(uint256 proposalId) external payable returns (bool success) {
+    function acceptTransferProposal(uint256 proposalId) external payable {
         TransferProposal memory proposal = _transferProposals[proposalId];
         require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the transfer in order to accept the proposal");
         require(proposal.collection.getRentalOwnershipTransferApproved(proposal.tokenId) == address(this) || proposal.collection.getRentedTokenTransferApproved(proposal.tokenId) == address(this) , "RentalMarketplace: proposer must approve rental transfer to this contract in order to accept the proposal");
@@ -382,24 +372,15 @@ contract RentalMarketplace {
         if(proposal.proposer == proposal.collection.ownerOf(proposal.tokenId)) {
             try proposal.collection.transferRentedToken(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
-                return true;
             }
-            catch {
-                return false;
-            }
+            catch {}
         }
         else if (proposal.proposer == rentals[rentals.length-1].provider) {
             try proposal.collection.transferRentalOwnership(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
                 emit ProposalAcceptance(proposalId, msg.sender, ProposalType.TRANSFER);
-                return true;
             }
-            catch {
-                return false;
-            }
-        }
-        else {
-            return false;
+            catch {}
         }
     }
 
@@ -407,7 +388,7 @@ contract RentalMarketplace {
         Can be called only by rental receiver to accept redemption proposal and end the layaway
         Caller must pay proposed price.
      */
-    function acceptRedemptionProposal(uint256 proposalId) external payable returns (bool success) {
+    function acceptRedemptionProposal(uint256 proposalId) external payable {
         TransferProposal memory proposal = _redemptionProposals[proposalId];
         require(msg.sender == proposal.collection.ownerOf(proposal.tokenId), "RentalMarketplace: only rental receiver can accept redemption proposal");
         require(msg.value >= proposal.price, "RentalMarketplace: you must pay for the transfer in order to accept the proposal");
@@ -423,11 +404,8 @@ contract RentalMarketplace {
         try proposal.collection.redeemRentedToken(proposal.tokenId) {
             payable(proposal.proposer).transfer(msg.value);
             emit ProposalAcceptance(proposalId, msg.sender, ProposalType.REDEMPTION);
-            return true;
         }
-        catch {
-            return false;
-        }
+        catch {}
     }
 
     /**

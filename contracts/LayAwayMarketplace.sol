@@ -261,7 +261,7 @@ contract LayawayMarketplace {
         Otherwise, if proposer is the layaway provider, the layaway ownership is transfered to a new provider.
         Caller must pay proposed price.
      */
-    function acceptTransferProposal(uint256 proposalId) external payable returns (bool success) {
+    function acceptTransferProposal(uint256 proposalId) external payable {
         TransferProposal memory proposal = _transferProposals[proposalId];
         require(msg.value >= proposal.price, "LayawayMarketplace: you must pay for the transfer in order to accept the proposal");
         require(proposal.collection.getLayawayOwnershipTransferApproved(proposal.tokenId) == address(this) || proposal.collection.getLayawayedTokenTransferApproved(proposal.tokenId) == address(this) , "LayawayMarketplace: proposer must approve layaway transfer to this contract in order to accept the proposal");
@@ -272,24 +272,16 @@ contract LayawayMarketplace {
         if(proposal.proposer == proposal.collection.getLayawayProvider(proposal.tokenId)) {
             try proposal.collection.transferLayawayOwnership(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
-                return true;
+                emit ProposalAcceptance(proposalId, msg.sender, ProposalType.TRANSFER);
             }
-            catch {
-                return false;
-            }
+            catch {}
         }
-        else if (proposal.proposer == proposal.collection.ownerOf(proposal.tokenId)) {      // if proposer is token owner
+        else if (proposal.proposer == proposal.collection.ownerOf(proposal.tokenId)) { 
             try proposal.collection.transferLayawayedToken(msg.sender, proposal.tokenId) {
                 payable(proposal.proposer).transfer(msg.value);
                 emit ProposalAcceptance(proposalId, msg.sender, ProposalType.TRANSFER);
-                return true;
             }
-            catch {
-                return false;
-            }
-        }
-        else {
-            return false;
+            catch {}
         }
     }
 
