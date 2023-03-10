@@ -126,9 +126,10 @@ For what concerns layaway, on the other hand, we have seen that the most known e
 \chapter{Proposed solution}
 \label{chap:2}
 In this chapter we will showcase our proposed solution, describing all of its features and how it can improve the current NFT rental and layaway state of the art. \newline
+The solution was developed using a methodology analogous to the one detailed in \cite{ref:UML}; in this book, the authors describe a process for specifying a component-based system from a software engineering point of view. In our solution, this methodology was slightly adapted to fit with the context of a smart contract standard, which is not extremely well suited to be specified in the form of components.\newline
 The main idea upon which this solution is based consists in avoiding the creation of new roles (as seen for the user role in ERC4907 standard) and also shifting from the \textit{escrow-wrap} model, as we have discussed the limitations that these approaches imply. \newline
 In particular, rental and layaway receivers will be set as owners of the rented or layawayed tokens, as the owner role is the only role natively supported by ERC721 standard. At this point, it becomes more clear why we need to extend the ERC721 features by creating the ERCX standard: the added functionalities will allow rented tokens to be returned to the rental provider when rental expires, and layawayed tokens to be foreclosed and returned to layaway provider if the agreed installments are not paid. The new standard will also make sure that rental and layaway receivers will not be able to arbitrarily transfer the the received tokens token during rental or layaway period, which would make impossible to return the tokens to the providers. \newline
-Rental and layaway methodologies will be discussed more in depth in the following sections.
+Rental and layaway functionalities will be discussed more in depth in the following sections.
 
 \section{Rental}
 An ERCX token rental can be started in two different modalities, depending on whether rental provider and receiver trust each other.\newline If they do trust each other, they can simply find an agreement on the rental price and duration; at this point the provider will start the rental, and the receiver will have to pay the agreed price. The receiver is not forced to make the payment, and this is why the provider must trust them: if the receiver doesn't pay the agreed price, they will still be the owner of the rented token for the whole agreed period, and there is nothing the provider can do to claim the token back. If, contrarily, the receiver pays the provider before they start the rental, the receiver is not guaranteed that the provider will actually start the rental. These implications will probably cause this type of approach to be very seldom used, as public blockchains and NFTs are mainly meant to be used in a trustless manner.\newline
@@ -552,11 +553,11 @@ Having analyzed the structure and behaviour of the proposed solution, we can now
 \section{Tests}
 The reference implementation has been tested using Hardhat\cite{ref:hardhat} testing environment. Hardhat is a development environment that facilitates building and debugging on Ethereum. It helps developers manage and automate the recurring tasks that are inherent to the process of building smart contracts and dApps. It also comes built-in with Hardhat Network, a local Ethereum network designed for development. \newline
 In our case, Hardhat was used to compile the smart contracts, deploy them on the local simulated network, and perform unit tests on them. These unit tests are written in javascript, making use of some Hardhat specific libraries, and can be found in the tests folder in the project repository. \newline
-The contract used for testing is the ERCX\_demo contract (contained in the project repository), which simply extends ERCX contract exposing ERC721's mint function, which is declared as internal in the Openzeppelin ERC721 reference implementation.
-The tests are designed to stress each functionality offered by the solution, and each of them comes with a string description which allows to understand exactly what its purposes are. Each functionality which can be carried out using an intermediary has been tested both with an EOA and a smart contract intermediary. The intermediary contracts used for this purpose are the reference rental and layaway marketplaces implementations, contained in the project repository. \newline
-The tests can be executed by simply cloning the Github repository and running the following commands inside the cloned folder:
+The contracts used for testing are ERCX\_demo, RentalMarketplace and LayawayMarketplace, all contained in the project repository. ERCX\_demo simply extends ERCX contract exposing ERC721's mint function, as it is declared as internal in Openzeppelin's ERC721 implementation; RentalMarketplace and LayawayMarketplace are the rental and layaway intermediaries reference implementations.\newline
+The tests are designed to stress each functionality offered by the solution, and each of them comes with a string description which allows to understand exactly what its purposes are. Each functionality which can be carried out using an intermediary has been tested both with an EOA and the mentioned smart contract intermediaries. \newline
+The tests can be executed by cloning the Github repository and running the following commands inside the cloned folder:
 \begin{lstlisting}[language=bash]
-  $ npm install --save-dev hardhat  
+  $ npm install hardhat  
   $ npx hardhat test
 \end{lstlisting}
 
@@ -569,10 +570,9 @@ In this solution, the high complexity is particularly problematic for two reason
 \subsection{Gas costs analysis}
 Whenever a smart contract is deployed to a blockchain or invoked, several operations need to be performed on every single node of the blockchain. For smart contract function calls, this means executing the function code and modifying the contract's state on every node; for contract deployment, instead, each node will have to store the contract code (which is contained inside the deployment transaction). In order to avoid network clogging and denial of service attacks, blockchain protocols require the account which performs these operations to pay a so called gas fee, which is proportional to the complexity of the requested operation. This means that the more a function is complex, the more its invocation will cost; similarly, the longer a smart contract's code is, the more its deployment will cost.\newline
 Gas fees are paid in the blockchain's native cryptocurrency, and on EVM-compatible chains they are calculated in terms of gas units: each low level operation has an associated cost in gas units; the cost of calling a function is given by the sum of the costs of all the low level operations that the function performs. To convert the gas cost in the corresponding actual cryptocurrency amount, the obtained number of gas units must be multiplied by the price of a single gas unit; in Ethereum, the price of a unit is given by the sum of a base fee and a priority fee. The base fee is calculated by the protocol in function of the network utilization, while the priority fee is set by the function caller as an incentive for the validators to process their transaction before the other ones.\newline
-Here we report an approximation of the price of the ERCX reference implementation contract deployment and each of its functions in terms of gas units. Note that the functions' prices are not fixed, as when the contract's data structures grow, the functions interacting with them could become more complex. These results were obtained using hardhat-gas-reporter npm pacakge, which can be found at \url{https://www.npmjs.com/package/hardhat-gas-reporter}. Some functions have been omitted, as they are declared as \textit{view}: this means that they do not modify the contract's state and only read from it. View functions will not cost gas if called from outside the blockchain, as the function can be resolved in the local node that is being used to connect to the network without submitting a transaction.
-On the other hand, if a view function in a contract is called from another contract, it will cost gas, as the read from the state has to be performed on every node. \newline
+Here we report an approximation of the price of the ERCX reference implementation contract deployment and each of its functions in terms of gas units. Note that the functions' prices are not fixed, as when the contract's data structures grow, the functions interacting with them could become more complex. These results were obtained using hardhat-gas-reporter npm pacakge, which can be found at \url{https://www.npmjs.com/package/hardhat-gas-reporter}. Some functions have been omitted, as they are declared as \textit{view}: this means that they do not modify the contract's state and only read from it. View functions will not cost gas if called from outside the blockchain, as the function can be resolved in the local node that is being used to connect to the network without submitting a transaction. On the other hand, if a view function in a contract is called from another contract, it will cost gas, as the read from the state has to be performed on every node. \newline
 Table~\ref{tab:Gas report} was obtained using the gas reporter tool, and shows for each function the maximum, minimum and average gas cost observed when running the tests.\newline
-The ERCX contract deployment costed 4149775 gas units, while LayawayMarketplace and RentalMarketplace deployments costed respectively 1654300 and 3351093 gas units. This cost is, as expected, much higher than the functions' cost; to make a comparison, the deployment of an ERC721 contract that extends Openzeppelin's ERC721 reference implementation (without any additional functionality) costs 2822618 gas units, which is about two thirds of the cost experienced for ERCX contract.
+The ERCX\_demo contract deployment costed 4149775 gas units, while LayawayMarketplace and RentalMarketplace deployments costed respectively 1654300 and 3351093 gas units. This cost is, as expected, much higher than the functions' cost; to make a comparison, the deployment of an ERC721 contract that extends Openzeppelin's ERC721 reference implementation (without any additional functionality) costs 2822618 gas units, which is about two thirds of the cost experienced for ERCX\_demo contract.
 
 \begin{table}
 \centering
@@ -646,10 +646,10 @@ Despotovic, V., Bjelica, D., and Barać, D. (2022). \textit{"Analysis of potenti
 Kaihua Qin, Liyi Zhou, Pablo Gamito, Philipp Jovanovic, and Arthur Gervais. 2021. \textit{"An empirical study of DeFi liquidations: incentives, risks, and instabilities"}. In Proceedings of the 21st ACM Internet Measurement Conference (IMC '21). Association for Computing Machinery, New York, NY, USA, 336–350. \url{https://doi.org/10.1145/3487552.3487811}.
 
 \bibitem{ref:EIP4907}
-Anders (@0xanders), Lance (@LanceSnow), Shrug <shrug@emojidao.org>, \textit{"ERC-4907: Rental NFT, an Extension of EIP-721,"} Ethereum Improvement Proposals, no. 4907, March 2022. [Online serial]. Available: \url{https://eips.ethereum.org/EIPS/eip-4907}.
+Anders (@0xanders), Lance (@LanceSnow), Shrug, \textit{"ERC-4907: Rental NFT, an Extension of EIP-721,"} Ethereum Improvement Proposals, no. 4907, March 2022. [Online serial]. Available: \url{https://eips.ethereum.org/EIPS/eip-4907}.
 
 \bibitem{ref:EIP721}
-William Entriken (@fulldecent), Dieter Shirley <dete@axiomzen.co>, Jacob Evans <jacob@dekz.net>, Nastassia Sachs <nastassia.sachs@protonmail.com>, \textit{"ERC-721: Non-Fungible Token Standard"}, Ethereum Improvement Proposals, no. 721, January 2018. [Online serial]. Available: \url{https://eips.ethereum.org/EIPS/eip-721}.
+William Entriken (@fulldecent), Dieter Shirley, Jacob Evans, Nastassia Sachs, \textit{"ERC-721: Non-Fungible Token Standard"}, Ethereum Improvement Proposals, no. 721, January 2018. [Online serial]. Available: \url{https://eips.ethereum.org/EIPS/eip-721}.
 
 \bibitem{ref:EVM}
 Ethereum Virtual Machine documentation, \url{https://ethereum.org/en/developers/docs/evm/}.
@@ -662,6 +662,9 @@ Vera Financial, \url{https://docs.vera.financial/hub/}.
 
 \bibitem{ref:double}
 Double protocol, \url{https://docs.double.one}.
+
+\bibitem{ref:UML}
+John Cheesman and John Daniels. 2000. UML components: a simple process for specifying component-based software. Addison-Wesley Longman Publishing Co., Inc., USA.
 
 \bibitem{ref:supermojo}
 Supermojo, \url{https://supermojo.com}.
