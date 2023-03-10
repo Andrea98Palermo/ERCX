@@ -15,6 +15,7 @@
 \usepackage{adjustbox}
 \usepackage{float}
 \usepackage{xurl}
+\usepackage{listings}
 \hbadness=99999
 
 \hypersetup{
@@ -551,7 +552,14 @@ Having analyzed the structure and behaviour of the proposed solution, we can now
 \section{Tests}
 The reference implementation has been tested using Hardhat\cite{ref:hardhat} testing environment. Hardhat is a development environment that facilitates building and debugging on Ethereum. It helps developers manage and automate the recurring tasks that are inherent to the process of building smart contracts and dApps. It also comes built-in with Hardhat Network, a local Ethereum network designed for development. \newline
 In our case, Hardhat was used to compile the smart contracts, deploy them on the local simulated network, and perform unit tests on them. These unit tests are written in javascript, making use of some Hardhat specific libraries, and can be found in the tests folder in the project repository. \newline
-The tests are designed to stress each functionality offered by the solution, and each of them comes with a string description which allows to understand exactly what its purposes are. Each functionality which can be carried out using an intermediary has been tested both with an EOA and a smart contract intermediary. The intermediary contracts used for this purpose are the reference rental and layaway marketplaces implementations, contained in the project repository.
+The contract used for testing is the ERCX\_demo contract (contained in the project repository), which simply extends ERCX contract exposing ERC721's mint function, which is declared as internal in the Openzeppelin ERC721 reference implementation.
+The tests are designed to stress each functionality offered by the solution, and each of them comes with a string description which allows to understand exactly what its purposes are. Each functionality which can be carried out using an intermediary has been tested both with an EOA and a smart contract intermediary. The intermediary contracts used for this purpose are the reference rental and layaway marketplaces implementations, contained in the project repository. \newline
+The tests can be executed by simply cloning the Github repository and running the following commands inside the cloned folder:
+\begin{lstlisting}[language=bash]
+  $ npm install --save-dev hardhat  
+  $ npx hardhat test
+\end{lstlisting}
+
 
 \section{Complexity of the solution}
 As the reader may have understood going trough the previous chapter, this solution is characterized by a significative complexity. This is the case mainly because of the decision of avoiding the creation of new user roles other than the owner defined in ERC721 standard, which entails the discussed advantages. This causes having to perform some additional operations and checks, in order to maintain consistency during the whole ERCX token lifecycle. \newline
@@ -564,7 +572,7 @@ Gas fees are paid in the blockchain's native cryptocurrency, and on EVM-compatib
 Here we report an approximation of the price of the ERCX reference implementation contract deployment and each of its functions in terms of gas units. Note that the functions' prices are not fixed, as when the contract's data structures grow, the functions interacting with them could become more complex. These results were obtained using hardhat-gas-reporter npm pacakge, which can be found at \url{https://www.npmjs.com/package/hardhat-gas-reporter}. Some functions have been omitted, as they are declared as \textit{view}: this means that they do not modify the contract's state and only read from it. View functions will not cost gas if called from outside the blockchain, as the function can be resolved in the local node that is being used to connect to the network without submitting a transaction.
 On the other hand, if a view function in a contract is called from another contract, it will cost gas, as the read from the state has to be performed on every node. \newline
 Table~\ref{tab:Gas report} was obtained using the gas reporter tool, and shows for each function the maximum, minimum and average gas cost observed when running the tests.\newline
-The ERCX contract deployment costed 4149775 gas units, while LayawayMarketplace and RentalMarketplace deployments costed respectively 1654300 and 3351093 gas units. This cost is, as expected, much higher than the functions' cost.
+The ERCX contract deployment costed 4149775 gas units, while LayawayMarketplace and RentalMarketplace deployments costed respectively 1654300 and 3351093 gas units. This cost is, as expected, much higher than the functions' cost; to make a comparison, the deployment of an ERC721 contract that extends Openzeppelin's ERC721 reference implementation (without any additional functionality) costs 2822618 gas units, which is about two thirds of the cost experienced for ERCX contract.
 
 \begin{table}
 \centering
